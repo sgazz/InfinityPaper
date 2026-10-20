@@ -6,11 +6,10 @@ enum PaperSurface: String, CaseIterable, Identifiable, Sendable {
 
     var id: String { rawValue }
 
-    private static let defaultsKey = "settings.paper.surface"
     static let didChangeNotification = Notification.Name("paperSurface.didChange")
 
     static func current(defaults: UserDefaults = .standard) -> PaperSurface {
-        guard let raw = defaults.string(forKey: defaultsKey),
+        guard let raw = defaults.string(forKey: AppSettings.paperSurface),
               let value = PaperSurface(rawValue: raw) else {
             return .quiet
         }
@@ -19,9 +18,13 @@ enum PaperSurface: String, CaseIterable, Identifiable, Sendable {
 
     static func setCurrent(_ value: PaperSurface, defaults: UserDefaults = .standard) {
         let old = current(defaults: defaults)
-        defaults.set(value.rawValue, forKey: defaultsKey)
+        defaults.set(value.rawValue, forKey: AppSettings.paperSurface)
         guard old != value else { return }
         NotificationCenter.default.post(name: didChangeNotification, object: value)
+    }
+
+    static var adaptiveBackgroundColor: UIColor {
+        UIColor { traits in current().backgroundColor(for: traits) }
     }
 
     func backgroundColor(for traits: UITraitCollection) -> UIColor {

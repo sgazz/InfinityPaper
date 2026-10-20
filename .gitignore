@@ -2,3 +2,5 @@
 **/*.xcuserstate
 **/project.xcworkspace/xcuserdata/
 **/project.xcworkspace/xcshareddata/WorkspaceSettings.xcsettings
+.DS_Store
+.agent/

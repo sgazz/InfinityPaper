@@ -7,99 +7,90 @@
 
 import Foundation
 import UIKit
-import OSLog
 
 /// Manages session persistence and autosave behavior.
 final class CanvasSessionManager {
-    private let logger = Logger(subsystem: "com.infinitypaper", category: "Session")
     private var periodicSaveTimer: Timer?
     /// Tokens for block-based `NotificationCenter` observers (must use `removeObserver(_:)` with each token).
     private var appLifecycleObserverTokens: [NSObjectProtocol] = []
 
-    private enum SessionKeys {
-        static let autosaveMode = "settings.session.autosaveMode"
-        static let autoloadOnLaunch = "settings.session.autoload"
-    }
-
-    private static let periodicSaveInterval: TimeInterval = 60
+    private let periodicSaveInterval: TimeInterval
+    private let defaults: UserDefaults
+    private let notificationCenter: NotificationCenter
+    var isPeriodicSaveScheduled: Bool { periodicSaveTimer != nil }
 
     /// Checks if session should be automatically loaded on launch.
     func shouldAutoloadOnLaunch() -> Bool {
-        let defaults = UserDefaults.standard
-        guard defaults.object(forKey: SessionKeys.autoloadOnLaunch) != nil else { return true }
-        return defaults.bool(forKey: SessionKeys.autoloadOnLaunch)
+        defaults.bool(forKey: AppSettings.autoload)
     }
 
     /// Gets the current autosave mode.
     func currentAutosaveMode() -> AutosaveMode {
-        let raw = UserDefaults.standard.string(forKey: SessionKeys.autosaveMode)
-            ?? AutosaveMode.onBackground.rawValue
-        return AutosaveMode(rawValue: raw) ?? .onBackground
+        let raw = defaults.string(forKey: AppSettings.autosaveMode)
+            ?? AppSettings.Default.autosaveMode.rawValue
+        return AutosaveMode(rawValue: raw) ?? AppSettings.Default.autosaveMode
     }
 
-    /// Saves a session to disk (encode on caller thread; write on a background queue; completion always on main).
-    /// - Parameters:
-    ///   - session: The session to save
-    ///   - completion: Called with success or error on the main queue
+    private let store: SessionFileStore
+    private var pendingOperations = 0
+    private var saveCallback: (() -> Void)?
+    private var isActive = true
+    private var backgroundTask: UIBackgroundTaskIdentifier = .invalid
+
+    init(store: SessionFileStore = SessionFileStore(url: SessionPersistence.sessionURL()),
+         defaults: UserDefaults = AppSettings.defaults, notificationCenter: NotificationCenter = .default,
+         periodicSaveInterval: TimeInterval = 60) {
+        self.store = store
+        self.defaults = defaults
+        self.notificationCenter = notificationCenter
+        self.periodicSaveInterval = periodicSaveInterval
+    }
+
     func saveSession(_ session: StoredSession, completion: @escaping (Result<Void, Error>) -> Void) {
-        let data: Data
-        do {
-            data = try SessionPersistence.encode(session)
-        } catch {
-            logger.error("Session encode failed: \(error.localizedDescription)")
-            DispatchQueue.main.async {
-                completion(.failure(error))
-            }
-            return
-        }
-        let url = SessionPersistence.sessionURL()
-        DispatchQueue.global(qos: .utility).async { [logger] in
-            do {
-                try data.write(to: url, options: Data.WritingOptions.atomic)
-                DispatchQueue.main.async {
-                    completion(.success(()))
-                }
-            } catch {
-                logger.error("Session save failed: \(error.localizedDescription)")
-                DispatchQueue.main.async {
-                    completion(.failure(error))
-                }
-            }
-        }
+        pendingOperations += 1
+        store.save(session) { [self] result in finishOperation(result, completion: completion) }
     }
 
-    /// Loads a session from disk on a background queue; completion is always called on the main queue.
-    /// - Parameter completion: Called with the loaded session or error on the main queue
     func loadSession(completion: @escaping (Result<StoredSession, Error>) -> Void) {
-        let url = SessionPersistence.sessionURL()
-        DispatchQueue.global(qos: .userInitiated).async { [logger] in
-            do {
-                let data = try Data(contentsOf: url)
-                let session = try SessionPersistence.decode(from: data)
-                DispatchQueue.main.async {
-                    completion(.success(session))
-                }
-            } catch {
-                logger.debug("Session load skipped or failed: \(error.localizedDescription)")
-                DispatchQueue.main.async {
-                    completion(.failure(error))
-                }
-            }
+        store.load { result in DispatchQueue.main.async { completion(result) } }
+    }
+
+    func deleteSession(completion: @escaping (Result<Void, Error>) -> Void) {
+        pendingOperations += 1
+        store.delete { [self] result in finishOperation(result, completion: completion) }
+    }
+
+    nonisolated private func finishOperation(_ result: Result<Void, Error>, completion: @escaping (Result<Void, Error>) -> Void) {
+        DispatchQueue.main.async { [self] in
+            pendingOperations -= 1
+            completion(result)
+            if pendingOperations == 0 { endBackgroundPersistence() }
         }
     }
 
-    /// Deletes the session file from disk.
-    func deleteSession() {
-        try? FileManager.default.removeItem(at: SessionPersistence.sessionURL())
+    func beginBackgroundPersistence() {
+        guard backgroundTask == .invalid else { return }
+        backgroundTask = UIApplication.shared.beginBackgroundTask(withName: "Save drawing") { [weak self] in
+            self?.endBackgroundPersistence(force: true)
+        }
+    }
+
+    func endBackgroundPersistence(force: Bool = false) {
+        guard backgroundTask != .invalid, force || pendingOperations == 0 else { return }
+        let task = backgroundTask
+        backgroundTask = .invalid
+        UIApplication.shared.endBackgroundTask(task)
     }
 
     /// Starts periodic save timer if autosave mode is set to periodic.
     /// - Parameter saveCallback: Called when timer fires to trigger a save
     func startPeriodicSaveTimerIfNeeded(saveCallback: @escaping () -> Void) {
+        self.saveCallback = saveCallback
         stopPeriodicSaveTimer()
+        guard isActive else { return }
         guard currentAutosaveMode() == .periodic else { return }
 
-        let timer = Timer.scheduledTimer(withTimeInterval: Self.periodicSaveInterval, repeats: true) { _ in
+        let timer = Timer.scheduledTimer(withTimeInterval: periodicSaveInterval, repeats: true) { _ in
             saveCallback()
         }
         RunLoop.main.add(timer, forMode: .common)
@@ -123,30 +114,39 @@ final class CanvasSessionManager {
     ) {
         unregisterFromAppLifecycle()
 
-        let resignToken = NotificationCenter.default.addObserver(
+        let resignToken = notificationCenter.addObserver(
             forName: UIApplication.willResignActiveNotification,
             object: nil,
             queue: .main
         ) { [weak self] _ in
+            self?.isActive = false
+            self?.beginBackgroundPersistence()
             saveOnResign()
             self?.stopPeriodicSaveTimer()
         }
 
-        let activeToken = NotificationCenter.default.addObserver(
+        let activeToken = notificationCenter.addObserver(
             forName: UIApplication.didBecomeActiveNotification,
             object: nil,
             queue: .main
-        ) { _ in
+        ) { [weak self] _ in
+            self?.isActive = true
             resumeOnActive()
         }
 
-        appLifecycleObserverTokens = [resignToken, activeToken]
+        let settingsToken = notificationCenter.addObserver(
+            forName: AppSettings.autosaveModeDidChange, object: nil, queue: .main
+        ) { [weak self] _ in
+            guard let self, let callback = self.saveCallback else { return }
+            self.startPeriodicSaveTimerIfNeeded(saveCallback: callback)
+        }
+        appLifecycleObserverTokens = [resignToken, activeToken, settingsToken]
     }
 
     /// Removes all block-based app lifecycle observers.
     func unregisterFromAppLifecycle() {
         for token in appLifecycleObserverTokens {
-            NotificationCenter.default.removeObserver(token)
+            notificationCenter.removeObserver(token)
         }
         appLifecycleObserverTokens.removeAll()
     }

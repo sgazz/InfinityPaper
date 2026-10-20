@@ -1,107 +1,47 @@
 import SwiftUI
 
 struct SettingsView: View {
-    // MARK: - Bindings / Callbacks to integrate with canvas and menu
+    // MARK: - Brush, export and session settings
+    @Environment(\.colorScheme) private var colorScheme
     @State private var selectedColorIndex: Int
     @State private var baseLineWidth: CGFloat
-    @State private var exportFormat: ExportFormat
-    @State private var exportResolution: CGFloat
-    @State private var exportMargin: CGFloat
-    @State private var includeBackgroundNoise: Bool
-    @State private var transparentBackground: Bool
-    @State private var autoNameExports: Bool
-    @State private var exportPrefix: String
-    @State private var hapticsEnabled: Bool
-    @State private var radialMenuScale: CGFloat
-    @State private var radialAnimationSpeed: CGFloat
-    @State private var autosaveMode: AutosaveMode
-    @State private var autoloadOnLaunch: Bool
+    @AppStorage(AppSettings.exportFull) private var exportFullDrawing = false
+    @AppStorage(AppSettings.exportFormat) private var exportFormat = AppSettings.Default.exportFormat
+    @AppStorage(AppSettings.resolution) private var exportResolution = AppSettings.Default.resolution
+    @AppStorage(AppSettings.margin) private var exportMargin = AppSettings.Default.margin
+    @AppStorage(AppSettings.includeNoise) private var includeBackgroundNoise = AppSettings.Default.includeNoise
+    @AppStorage(AppSettings.transparent) private var transparentBackground = AppSettings.Default.transparent
+    @AppStorage(AppSettings.autoName) private var autoNameExports = AppSettings.Default.autoName
+    @AppStorage(AppSettings.prefix) private var exportPrefix = AppSettings.Default.prefix
+    @AppStorage(AppSettings.autosaveMode) private var autosaveMode = AppSettings.Default.autosaveMode
+    @AppStorage(AppSettings.autoload) private var autoloadOnLaunch = AppSettings.Default.autoload
     @State private var paperSurface: PaperSurface
-    @State private var highContrastUI: Bool
-    @State private var largerMenuButtons: Bool
-    @State private var verboseAccessibilityHints: Bool
-    @State private var legacyRadialMenuTrigger: Bool
 
     let palette: [UIColor]
-    let onSelectBaseColor: (UIColor) -> Void
+    let onSelectColor: (Int) -> Void
     let onLineWidthChanged: (CGFloat) -> Void
-    let onClearSession: () -> Void
     let onLoadPreviousSession: () -> Void
-    let onResetRadialMenuPosition: () -> Void
-    let onLegacyRadialTriggerChanged: () -> Void
     let onDismiss: () -> Void
-
-    // UserDefaults keys
-    private enum Keys {
-        static let baseColorIndex = "settings.baseColorIndex"
-        static let baseLineWidth = "settings.baseLineWidth"
-        static let exportFormat = "settings.export.format"
-        static let exportResolution = "settings.export.resolution"
-        static let exportMargin = "settings.export.margin"
-        static let includeBackgroundNoise = "settings.export.includeNoise"
-        static let transparentBackground = "settings.export.transparent"
-        static let autoNameExports = "settings.export.autoName"
-        static let exportPrefix = "settings.export.prefix"
-        static let paperSurface = "settings.paper.surface"
-        static let hapticsEnabled = "settings.haptics.enabled"
-        static let radialMenuScale = "settings.radial.scale"
-        static let radialAnimationSpeed = "settings.radial.animationSpeed"
-        static let autosaveMode = "settings.session.autosaveMode"
-        static let autoloadOnLaunch = "settings.session.autoload"
-        static let highContrastUI = "settings.ui.highContrast"
-        static let largerMenuButtons = "settings.ui.largerButtons"
-        static let verboseAccessibilityHints = "settings.ui.verboseA11y"
-        static let legacyRadialMenuTrigger = "settings.ui.legacyRadialMenuTrigger"
-    }
 
     init(
         palette: [UIColor],
-        currentBaseColor: UIColor,
+        currentColorIndex: Int,
         currentLineWidth: CGFloat,
-        onSelectBaseColor: @escaping (UIColor) -> Void,
+        onSelectColor: @escaping (Int) -> Void,
         onLineWidthChanged: @escaping (CGFloat) -> Void,
-        onClearSession: @escaping () -> Void,
         onLoadPreviousSession: @escaping () -> Void,
-        onResetRadialMenuPosition: @escaping () -> Void,
-        onLegacyRadialTriggerChanged: @escaping () -> Void = {},
         onDismiss: @escaping () -> Void
     ) {
         self.palette = palette
-        self.onSelectBaseColor = onSelectBaseColor
+        self.onSelectColor = onSelectColor
         self.onLineWidthChanged = onLineWidthChanged
-        self.onClearSession = onClearSession
         self.onLoadPreviousSession = onLoadPreviousSession
-        self.onResetRadialMenuPosition = onResetRadialMenuPosition
-        self.onLegacyRadialTriggerChanged = onLegacyRadialTriggerChanged
         self.onDismiss = onDismiss
 
-        // Load defaults
-        let defaults = UserDefaults.standard
-        let defaultColorIndex = defaults.integer(forKey: Keys.baseColorIndex)
-        _selectedColorIndex = State(initialValue: min(max(0, defaultColorIndex), max(0, palette.count - 1)))
-        _baseLineWidth = State(initialValue: defaults.object(forKey: Keys.baseLineWidth) == nil ? currentLineWidth : CGFloat(defaults.double(forKey: Keys.baseLineWidth)))
-        _exportFormat = State(initialValue: ExportFormat(rawValue: defaults.string(forKey: Keys.exportFormat) ?? ExportFormat.pdf.rawValue) ?? .pdf)
-        _exportResolution = State(initialValue: defaults.object(forKey: Keys.exportResolution) != nil ? CGFloat(defaults.double(forKey: Keys.exportResolution)) : 2.0)
-        _exportMargin = State(initialValue: defaults.object(forKey: Keys.exportMargin) != nil ? CGFloat(defaults.double(forKey: Keys.exportMargin)) : 0.0)
-        _includeBackgroundNoise = State(initialValue: defaults.object(forKey: Keys.includeBackgroundNoise) != nil ? defaults.bool(forKey: Keys.includeBackgroundNoise) : true)
-        _transparentBackground = State(initialValue: defaults.object(forKey: Keys.transparentBackground) != nil ? defaults.bool(forKey: Keys.transparentBackground) : false)
-        _autoNameExports = State(initialValue: defaults.object(forKey: Keys.autoNameExports) != nil ? defaults.bool(forKey: Keys.autoNameExports) : true)
-        _exportPrefix = State(initialValue: CanvasExportManager.sanitizedExportPrefix(defaults.string(forKey: Keys.exportPrefix)))
-        _paperSurface = State(initialValue: PaperSurface.current(defaults: defaults))
-        _hapticsEnabled = State(initialValue: defaults.object(forKey: Keys.hapticsEnabled) != nil ? defaults.bool(forKey: Keys.hapticsEnabled) : true)
-        _radialMenuScale = State(initialValue: defaults.object(forKey: Keys.radialMenuScale) != nil ? CGFloat(defaults.double(forKey: Keys.radialMenuScale)) : 1.0)
-        _radialAnimationSpeed = State(initialValue: defaults.object(forKey: Keys.radialAnimationSpeed) != nil ? CGFloat(defaults.double(forKey: Keys.radialAnimationSpeed)) : 1.0)
-        _autosaveMode = State(initialValue: AutosaveMode(rawValue: defaults.string(forKey: Keys.autosaveMode) ?? AutosaveMode.onBackground.rawValue) ?? .onBackground)
-        _autoloadOnLaunch = State(initialValue: defaults.object(forKey: Keys.autoloadOnLaunch) != nil ? defaults.bool(forKey: Keys.autoloadOnLaunch) : true)
-        _highContrastUI = State(initialValue: defaults.object(forKey: Keys.highContrastUI) != nil ? defaults.bool(forKey: Keys.highContrastUI) : false)
-        _largerMenuButtons = State(initialValue: defaults.object(forKey: Keys.largerMenuButtons) != nil ? defaults.bool(forKey: Keys.largerMenuButtons) : false)
-        _verboseAccessibilityHints = State(initialValue: defaults.object(forKey: Keys.verboseAccessibilityHints) != nil ? defaults.bool(forKey: Keys.verboseAccessibilityHints) : true)
-        _legacyRadialMenuTrigger = State(initialValue: defaults.object(forKey: Keys.legacyRadialMenuTrigger) != nil && defaults.bool(forKey: Keys.legacyRadialMenuTrigger))
+        _selectedColorIndex = State(initialValue: min(max(0, currentColorIndex), max(0, palette.count - 1)))
+        _baseLineWidth = State(initialValue: currentLineWidth)
+        _paperSurface = State(initialValue: PaperSurface.current())
 
-        // Apply initial color selection if matches current
-        if let idx = palette.firstIndex(where: { $0.isEqual(currentBaseColor) }) {
-            _selectedColorIndex = State(initialValue: idx)
-        }
     }
 
     var body: some View {
@@ -136,21 +76,6 @@ struct SettingsView: View {
                     }
                 }
 
-                Section(header: Text("Accessibility & UI")) {
-                    Toggle("High contrast UI", isOn: $highContrastUI)
-                        .onChange(of: highContrastUI) { _, newValue in
-                            UserDefaults.standard.set(newValue, forKey: Keys.highContrastUI)
-                        }
-                    Toggle("Larger menu buttons", isOn: $largerMenuButtons)
-                        .onChange(of: largerMenuButtons) { _, newValue in
-                            UserDefaults.standard.set(newValue, forKey: Keys.largerMenuButtons)
-                        }
-                    Toggle("Verbose VoiceOver hints", isOn: $verboseAccessibilityHints)
-                        .onChange(of: verboseAccessibilityHints) { _, newValue in
-                            UserDefaults.standard.set(newValue, forKey: Keys.verboseAccessibilityHints)
-                        }
-                }
-
                 Section(header: Text("About")) {
                     Text("InfinityPaper")
                     Text("Version \(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "-")")
@@ -171,17 +96,14 @@ struct SettingsView: View {
                 Text("Periodic").tag(AutosaveMode.periodic)
             }
             .pickerStyle(.segmented)
-            .onChange(of: autosaveMode) { _, newValue in
-                UserDefaults.standard.set(newValue.rawValue, forKey: Keys.autosaveMode)
+            .onChange(of: autosaveMode) { _, _ in
+                NotificationCenter.default.post(name: AppSettings.autosaveModeDidChange, object: nil)
             }
             Text("On background: save when you leave the app. Periodic: also save every 60 seconds.")
                 .font(.caption)
                 .foregroundColor(.secondary)
 
             Toggle("Autoload last saved session on launch", isOn: $autoloadOnLaunch)
-                .onChange(of: autoloadOnLaunch) { _, newValue in
-                    UserDefaults.standard.set(newValue, forKey: Keys.autoloadOnLaunch)
-                }
             Text("When on, the last saved drawing is loaded on app launch.")
                 .font(.caption)
                 .foregroundColor(.secondary)
@@ -193,20 +115,24 @@ struct SettingsView: View {
             Text("Default brush color")
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 12) {
-                    ForEach(Array(palette.enumerated()), id: \.0) { idx, uiColor in
-                        let color = Color(uiColor)
-                        Circle()
-                            .fill(color)
-                            .frame(width: 32, height: 32)
-                            .overlay(
-                                Circle().stroke(Color.black.opacity(selectedColorIndex == idx ? 0.6 : 0.15), lineWidth: selectedColorIndex == idx ? 3 : 1)
-                            )
-                            .onTapGesture {
-                                selectedColorIndex = idx
-                                let chosen = palette[idx]
-                                onSelectBaseColor(chosen)
-                                UserDefaults.standard.set(idx, forKey: Keys.baseColorIndex)
-                            }
+                    ForEach(Array(palette.enumerated()), id: \.0) { idx, _ in
+                        let traits = UITraitCollection(userInterfaceStyle: colorScheme == .dark ? .dark : .light)
+                        let color = Color(CanvasBrush.color(at: idx, traits: traits))
+                        Button {
+                            selectedColorIndex = idx
+                            onSelectColor(idx)
+                        } label: {
+                            Circle()
+                                .fill(color)
+                                .frame(width: 32, height: 32)
+                                .overlay(Circle().stroke(Color.primary.opacity(selectedColorIndex == idx ? 0.6 : 0.15),
+                                                         lineWidth: selectedColorIndex == idx ? 3 : 1))
+                                .frame(width: 44, height: 44)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(Text(CanvasBrush.colorName(at: idx)))
+                        .accessibilityAddTraits(selectedColorIndex == idx ? .isSelected : [])
                     }
                 }
                 .padding(.vertical, 4)
@@ -226,29 +152,23 @@ struct SettingsView: View {
             }
             .onChange(of: baseLineWidth) { _, newValue in
                 onLineWidthChanged(newValue)
-                UserDefaults.standard.set(Double(newValue), forKey: Keys.baseLineWidth)
             }
         }
     }
 
     private var exportSection: some View {
         VStack(alignment: .leading, spacing: 12) {
+            Toggle("Export entire drawing", isOn: $exportFullDrawing)
             Picker("Export format", selection: $exportFormat) {
                 Text("PDF").tag(ExportFormat.pdf)
                 Text("PNG").tag(ExportFormat.png)
             }
             .pickerStyle(.segmented)
-            .onChange(of: exportFormat) { _, newValue in
-                UserDefaults.standard.set(newValue.rawValue, forKey: Keys.exportFormat)
-            }
 
             HStack {
                 Text("Margins")
                 Slider(value: $exportMargin, in: 0...64, step: 2)
                 Text("\(Int(exportMargin)) pt")
-            }
-            .onChange(of: exportMargin) { _, newValue in
-                UserDefaults.standard.set(Double(newValue), forKey: Keys.exportMargin)
             }
 
             if exportFormat == .png {
@@ -257,79 +177,24 @@ struct SettingsView: View {
                     Slider(value: $exportResolution, in: 1.0...4.0, step: 0.5)
                     Text(String(format: "x%.1f", exportResolution))
                 }
-                .onChange(of: exportResolution) { _, newValue in
-                    UserDefaults.standard.set(Double(newValue), forKey: Keys.exportResolution)
-                }
 
                 Toggle("Include background noise (viewport PNG)", isOn: $includeBackgroundNoise)
-                    .onChange(of: includeBackgroundNoise) { _, newValue in
-                        UserDefaults.standard.set(newValue, forKey: Keys.includeBackgroundNoise)
-                    }
+                    .disabled(exportFullDrawing)
                 Toggle("Transparent background (PNG)", isOn: $transparentBackground)
-                    .onChange(of: transparentBackground) { _, newValue in
-                        UserDefaults.standard.set(newValue, forKey: Keys.transparentBackground)
-                    }
             }
 
             Toggle("Auto-name exports", isOn: $autoNameExports)
-                .onChange(of: autoNameExports) { _, newValue in
-                    UserDefaults.standard.set(newValue, forKey: Keys.autoNameExports)
-                }
             TextField("Export prefix", text: $exportPrefix)
+                .disabled(!autoNameExports)
                 .textInputAutocapitalization(.never)
+                .onAppear { exportPrefix = CanvasExportManager.sanitizedExportPrefix(exportPrefix) }
                 .onChange(of: exportPrefix) { _, newValue in
                     let sanitized = CanvasExportManager.sanitizedExportPrefix(newValue)
                     if sanitized != newValue {
                         exportPrefix = sanitized
                     }
-                    UserDefaults.standard.set(sanitized, forKey: Keys.exportPrefix)
                 }
         }
     }
 
-    private var hapticsSection: some View {
-        Toggle("Haptics in radial menu", isOn: $hapticsEnabled)
-            .onChange(of: hapticsEnabled) { _, newValue in
-                UserDefaults.standard.set(newValue, forKey: Keys.hapticsEnabled)
-            }
-    }
-
-    private var radialMenuSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text("Radial menu scale")
-                Slider(value: $radialMenuScale, in: 0.8...1.4, step: 0.05)
-                Text(String(format: "%.2f×", radialMenuScale))
-            }
-            .onChange(of: radialMenuScale) { _, newValue in
-                UserDefaults.standard.set(Double(newValue), forKey: Keys.radialMenuScale)
-            }
-
-            HStack {
-                Text("Radial animation speed")
-                Slider(value: $radialAnimationSpeed, in: 0.5...1.5, step: 0.05)
-                Text(String(format: "%.2fx", radialAnimationSpeed))
-            }
-            .onChange(of: radialAnimationSpeed) { _, newValue in
-                UserDefaults.standard.set(Double(newValue), forKey: Keys.radialAnimationSpeed)
-            }
-
-            Button("Reset radial size & animation speed") {
-                radialMenuScale = 1.0
-                radialAnimationSpeed = 1.0
-                UserDefaults.standard.set(1.0, forKey: Keys.radialMenuScale)
-                UserDefaults.standard.set(1.0, forKey: Keys.radialAnimationSpeed)
-            }
-
-            Button("Reset radial menu position") {
-                onResetRadialMenuPosition()
-            }
-        }
-    }
 }
-
-// MARK: - Supporting Types
-
-enum ExportFormat: String, CaseIterable, Identifiable { case pdf, png; var id: String { rawValue } }
-
-enum AutosaveMode: String, CaseIterable, Identifiable { case onBackground, periodic; var id: String { rawValue } }

@@ -16,6 +16,10 @@ struct InfinityPaperApp: App {
     /// After the splash fade completes, remove the splash layer from the hierarchy.
     @State private var splashLayerRemoved = false
 
+    init() {
+        _ = AppSettings.defaults
+    }
+
     var body: some Scene {
         WindowGroup {
             ZStack {
@@ -61,9 +65,7 @@ private struct SplashView: View {
 
     /// Matches the paper world tone for a seamless launch handoff.
     private var splashBackground: Color {
-        Color(uiColor: UIColor { traits in
-            PaperSurface.current().backgroundColor(for: traits)
-        })
+        Color(uiColor: PaperSurface.adaptiveBackgroundColor)
     }
 
     /// Whisper line: explicit contrast on warm light vs deep dark splash (avoids muddy `.secondary` on #1D1C1A).

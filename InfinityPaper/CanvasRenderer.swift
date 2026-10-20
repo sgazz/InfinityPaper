@@ -36,20 +36,6 @@ final class CanvasRenderer {
         static let strokeEndpointBlend: CGFloat = 0.08
     }
     
-    /// Draws a stroke in view coordinates (applying content offset transform).
-    /// - Parameters:
-    ///   - stroke: The stroke to draw
-    ///   - context: The graphics context
-    ///   - contentOffset: The current scroll offset
-    static func drawStroke(
-        _ stroke: RenderStroke,
-        in context: CGContext,
-        contentOffset: CGPoint
-    ) {
-        guard let prepared = prepareStroke(stroke) else { return }
-        drawPreparedStroke(prepared, in: context, contentOffset: contentOffset)
-    }
-    
     /// Draws a stroke in world coordinates (no transform).
     /// - Parameters:
     ///   - stroke: The stroke to draw
@@ -63,23 +49,17 @@ final class CanvasRenderer {
     }
 
     static func prepareStroke(_ stroke: RenderStroke) -> PreparedRenderStroke? {
+        if let point = stroke.points.first, stroke.points.count == 1 {
+            return PreparedRenderStroke(color: stroke.color, segments: [
+                PreparedRenderStrokeSegment(start: point, end: CGPoint(x: point.x + 0.01, y: point.y), width: stroke.lineWidth)
+            ])
+        }
         guard stroke.points.count > 1 else { return nil }
         let smoothed = smoothedPoints(for: stroke.points, passes: 2)
         guard smoothed.count > 1 else { return nil }
         let segments = makeSegments(stroke, smoothedPoints: smoothed)
         guard !segments.isEmpty else { return nil }
         return PreparedRenderStroke(color: stroke.color, segments: segments)
-    }
-
-    static func drawPreparedStroke(
-        _ prepared: PreparedRenderStroke,
-        in context: CGContext,
-        contentOffset: CGPoint
-    ) {
-        context.saveGState()
-        context.translateBy(x: -contentOffset.x, y: -contentOffset.y)
-        drawPreparedStrokeWorld(prepared, in: context)
-        context.restoreGState()
     }
 
     static func drawPreparedStrokeWorld(

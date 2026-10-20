@@ -25,7 +25,6 @@
 "toolbar.settings" = "Settings";
 "toolbar.paper_lock" = "Lock paper movement";
 "toolbar.more" = "More";
-"toolbar.more_about" = "About";
 "toolbar.width_a11y_thin" = "Thin stroke";
 "toolbar.width_a11y_medium" = "Medium stroke";
 "toolbar.width_a11y_bold" = "Bold stroke";
@@ -34,8 +33,6 @@
 "toolbar.clear_confirm_title" = "Clear this canvas?";
 "toolbar.clear_confirm_message" = "This removes every stroke in the current session. You can’t undo this step.";
 "toolbar.clear_confirm_action" = "Clear";
-"toolbar.drag_a11y" = "Move toolbar";
-"toolbar.drag_a11y_hint" = "Drag the toolbar across the screen; release near an edge to dock it. Short taps still use the buttons.";
 "toolbar.infinity_a11y" = "Infinity";
 "toolbar.infinity_a11y_hint" = "Opens a compact menu for canvas and view actions.";
 "toolbar.infinity_clear" = "Clear canvas…";
@@ -56,8 +53,7 @@
 "toast.paper_movement_locked" = "Paper movement locked.";
 "toast.paper_movement_unlocked" = "Paper movement unlocked.";
 
-"accessibility.canvas_hint_toolbar" = "Two-finger pan to move the tape. Use the edge toolbar for colors, line width, undo, export, and settings. Drag the toolbar toward another edge to dock it; along the left or right edge it turns vertical.";
-"accessibility.canvas_hint_radial" = "Two-finger pan to move the tape. Double-tap the Infinity button to open the radial menu for tools.";
+"accessibility.canvas_hint_toolbar" = "Two-finger pan to move the paper, pinch to zoom, and double-tap with two fingers to reset the view. Use the top toolbar for colors, line width, undo, export, and settings.";
 "toast.saved" = "Saved";
 "toast.save_failed" = "Save failed";
 "toast.undo" = "Undo";
@@ -65,3 +61,5 @@
 "toast.session_cleared" = "Session cleared";
 "alert.clear_title" = "Clear drawing?";
 "alert.clear_message" = "This will remove all strokes in current session. This cannot be undone.";
+
+"toolbar.paper_unlock" = "Unlock paper movement";

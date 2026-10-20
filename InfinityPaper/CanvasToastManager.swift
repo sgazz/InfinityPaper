@@ -15,31 +15,20 @@ enum ToastType {
     case info
 
     var backgroundColor: UIColor {
-        UIColor { traitCollection in
-            let isDark = traitCollection.userInterfaceStyle == .dark
-            switch self {
-            case .success:
-                return isDark
-                    ? UIColor(red: 0.2, green: 0.7, blue: 0.3, alpha: 0.95)
-                    : UIColor(red: 0.2, green: 0.7, blue: 0.3, alpha: 0.95)
-            case .error:
-                return isDark
-                    ? UIColor(red: 0.9, green: 0.2, blue: 0.2, alpha: 0.95)
-                    : UIColor(red: 0.9, green: 0.2, blue: 0.2, alpha: 0.95)
-            case .warning:
-                return isDark
-                    ? UIColor(red: 0.95, green: 0.65, blue: 0.1, alpha: 0.95)
-                    : UIColor(red: 0.95, green: 0.65, blue: 0.1, alpha: 0.95)
-            case .info:
-                return isDark
-                    ? UIColor(white: 0.2, alpha: 0.95)
-                    : UIColor(white: 0.95, alpha: 0.95)
-            }
+        switch self {
+        case .success: return UIColor(red: 0.12, green: 0.42, blue: 0.2, alpha: 1)
+        case .error: return UIColor(red: 0.7, green: 0.12, blue: 0.15, alpha: 1)
+        case .warning: return UIColor(red: 0.95, green: 0.65, blue: 0.1, alpha: 1)
+        case .info: return UIColor { $0.userInterfaceStyle == .dark ? UIColor(white: 0.2, alpha: 1) : UIColor(white: 0.95, alpha: 1) }
         }
     }
 
     var textColor: UIColor {
-        UIColor.white.withAlphaComponent(0.95)
+        switch self {
+        case .warning: return .black
+        case .info: return .label
+        default: return .white
+        }
     }
 }
 
@@ -47,6 +36,7 @@ enum ToastType {
 final class CanvasToastManager {
     private let label: UILabel
     private var timer: Timer?
+    private var currentToastType: ToastType = .info
     private weak var parentView: UIView?
     private var currentTraitCollection: UITraitCollection
     
@@ -140,8 +130,9 @@ final class CanvasToastManager {
     }
     
     private func updateAppearance(for type: ToastType? = nil) {
-        let toastType = type ?? .info
-        label.textColor = toastType.textColor
+        if let type { currentToastType = type }
+        let toastType = currentToastType
+        label.textColor = toastType.textColor.resolvedColor(with: currentTraitCollection)
         label.backgroundColor = toastType.backgroundColor.resolvedColor(with: currentTraitCollection)
     }
 }

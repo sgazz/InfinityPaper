@@ -147,7 +147,8 @@ private struct ToolbarColorPickerBody: View {
                             .frame(width: swatch + 10, height: swatch + 10)
                         }
                         .buttonStyle(.plain)
-                        .accessibilityLabel(Text(String(format: NSLocalizedString("toolbar.color_slot", comment: ""), idx + 1)))
+                        .accessibilityLabel(Text(CanvasBrush.colorName(at: idx)))
+                        .accessibilityAddTraits(idx == selectedIndex ? .isSelected : [])
                     }
                 }
             }
@@ -250,61 +251,11 @@ private struct InfinityToolbarPopover: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            infinityRow(
-                titleKey: "toolbar.infinity_clear",
-                systemImage: "trash",
-                isDestructive: true,
-                action: onClearCanvas
-            )
-            divider
-            infinityRow(
-                titleKey: "toolbar.infinity_new_space",
-                systemImage: "square.dashed",
-                isDestructive: false,
-                action: onNewSpace
-            )
-            divider
-            infinityRow(
-                titleKey: "toolbar.infinity_center",
-                systemImage: "scope",
-                isDestructive: false,
-                action: onCenterView
-            )
-            divider
-            infinityRow(
-                titleKey: "toolbar.infinity_zoom_in",
-                systemImage: "plus.magnifyingglass",
-                isDestructive: false,
-                action: onZoomIn
-            )
-            divider
-            infinityRow(
-                titleKey: "toolbar.infinity_zoom_out",
-                systemImage: "minus.magnifyingglass",
-                isDestructive: false,
-                action: onZoomOut
-            )
-            divider
-            infinityRow(
-                titleKey: "toolbar.infinity_reset_view",
-                systemImage: "arrow.counterclockwise",
-                isDestructive: false,
-                action: onResetView
-            )
-            divider
-            infinityRow(
-                titleKey: "toolbar.infinity_fit_content",
-                systemImage: "arrow.up.left.and.down.right.magnifyingglass",
-                isDestructive: false,
-                action: onFitContent
-            )
-            divider
-            infinityRow(
-                titleKey: "toolbar.infinity_focus",
-                systemImage: "moon.stars",
-                isDestructive: false,
-                action: onFocusMode
-            )
+            ForEach(Array(menuItems.enumerated()), id: \.offset) { index, item in
+                if index > 0 { divider }
+                infinityRow(titleKey: item.title, systemImage: item.icon,
+                            isDestructive: index == 0, action: item.action)
+            }
         }
         .frame(minWidth: isPad ? 220 : 196)
         .padding(.vertical, isPad ? 6 : 4)
@@ -319,6 +270,19 @@ private struct InfinityToolbarPopover: View {
         .shadow(color: Color.black.opacity(colorScheme == .dark ? 0.35 : 0.08), radius: 10, y: 4)
     }
 
+    private var menuItems: [(title: String, icon: String, action: () -> Void)] {
+        [
+            ("toolbar.infinity_clear", "trash", onClearCanvas),
+            ("toolbar.infinity_new_space", "square.dashed", onNewSpace),
+            ("toolbar.infinity_center", "scope", onCenterView),
+            ("toolbar.infinity_zoom_in", "plus.magnifyingglass", onZoomIn),
+            ("toolbar.infinity_zoom_out", "minus.magnifyingglass", onZoomOut),
+            ("toolbar.infinity_reset_view", "arrow.counterclockwise", onResetView),
+            ("toolbar.infinity_fit_content", "arrow.up.left.and.down.right.magnifyingglass", onFitContent),
+            ("toolbar.infinity_focus", "moon.stars", onFocusMode)
+        ]
+    }
+
     private var divider: some View {
         Divider()
             .padding(.leading, isPad ? 44 : 40)
@@ -327,24 +291,15 @@ private struct InfinityToolbarPopover: View {
     @ViewBuilder
     private func infinityRow(
         titleKey: String,
-        systemImage: String?,
-        imageAssetName: String? = nil,
+        systemImage: String,
         isDestructive: Bool,
         action: @escaping () -> Void
     ) -> some View {
         let label = HStack(spacing: 12) {
-            if let imageAssetName, UIImage(named: imageAssetName) != nil {
-                Image(imageAssetName)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: isPad ? 22 : 20, height: isPad ? 22 : 20)
-                    .frame(width: 24, alignment: .center)
-            } else if let systemImage {
-                Image(systemName: systemImage)
-                    .font(.system(size: isPad ? 16 : 15, weight: .medium))
-                    .foregroundStyle(isDestructive ? Color.red.opacity(0.85) : Color.primary.opacity(0.55))
-                    .frame(width: 24, alignment: .center)
-            }
+            Image(systemName: systemImage)
+                .font(.system(size: isPad ? 16 : 15, weight: .medium))
+                .foregroundStyle(isDestructive ? Color.red.opacity(0.85) : Color.primary.opacity(0.55))
+                .frame(width: 24, alignment: .center)
             Text(NSLocalizedString(titleKey, comment: ""))
                 .font(.system(size: isPad ? 16 : 15, weight: .medium))
                 .foregroundStyle(isDestructive ? Color.primary : Color.primary.opacity(0.88))
@@ -354,13 +309,8 @@ private struct InfinityToolbarPopover: View {
         .padding(.vertical, isPad ? 12 : 10)
         .contentShape(Rectangle())
 
-        if isDestructive {
-            Button(role: .destructive, action: action) { label }
-                .buttonStyle(.plain)
-        } else {
-            Button(action: action) { label }
-                .buttonStyle(.plain)
-        }
+        Button(role: isDestructive ? .destructive : nil, action: action) { label }
+            .buttonStyle(.plain)
     }
 }
 
@@ -368,7 +318,6 @@ private struct InfinityToolbarPopover: View {
 
 struct CanvasFloatingToolbar: View {
     @ObservedObject var broker: CanvasToolbarStateBroker
-    let dock: CanvasToolbarDock
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.colorScheme) private var colorScheme
 
@@ -392,18 +341,12 @@ struct CanvasFloatingToolbar: View {
     @State private var showWidthPicker = false
     @State private var showInfinityMenu = false
 
-    /// Brand purple (∞ Paper identity).
-    private static let infinityBrand = Color(red: 157 / 255, green: 66 / 255, blue: 240 / 255)
-
     private var isPad: Bool {
         UIDevice.current.userInterfaceIdiom == .pad || horizontalSizeClass == .regular
     }
 
-    private var isVertical: Bool { dock.usesVerticalToolbarLayout }
-
     private var capsuleHPadding: CGFloat { isPad ? 22 : 14 }
     private var interItemSpacing: CGFloat { isPad ? 14 : 10 }
-    private var verticalItemSpacing: CGFloat { isPad ? 12 : 10 }
     private var iconFrame: CGFloat { isPad ? 40 : 34 }
 
     private var capsuleFill: Color {
@@ -432,21 +375,16 @@ struct CanvasFloatingToolbar: View {
     private var popoverArrow: Edge { .top }
 
     var body: some View {
-        Group {
-            if isVertical {
-                VStack(spacing: verticalItemSpacing) {
-                    controlButtons
-                }
-            } else {
-                HStack(spacing: interItemSpacing) {
-                    controlButtons
-                }
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: interItemSpacing) { controlButtons }
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: interItemSpacing) { controlButtons }
             }
+            .frame(height: iconFrame)
         }
-        .animation(.easeInOut(duration: 0.22), value: dock)
         .foregroundStyle(iconTint)
-        .padding(.horizontal, isVertical ? (isPad ? 11 : 9) : capsuleHPadding)
-        .padding(.vertical, isVertical ? capsuleHPadding : (isPad ? 11 : 9))
+        .padding(.horizontal, capsuleHPadding)
+        .padding(.vertical, isPad ? 11 : 9)
         .background(
             Capsule(style: .continuous)
                 .fill(capsuleFill)
@@ -525,42 +463,16 @@ struct CanvasFloatingToolbar: View {
             .presentationCompactAdaptation(.popover)
         }
 
-        Button(action: onUndo) {
-            Image(systemName: "arrow.uturn.backward")
-                .font(.system(size: isPad ? 19 : 17, weight: .medium))
-                .frame(width: iconFrame, height: iconFrame)
-        }
-        .buttonStyle(.plain)
-        .disabled(!broker.undoEnabled)
-        .opacity(broker.undoEnabled ? 1 : 0.35)
-        .accessibilityLabel(Text(String(localized: "toolbar.undo")))
-
-        Button(action: onRedo) {
-            Image(systemName: "arrow.uturn.forward")
-                .font(.system(size: isPad ? 19 : 17, weight: .medium))
-                .frame(width: iconFrame, height: iconFrame)
-        }
-        .buttonStyle(.plain)
-        .disabled(!broker.redoEnabled)
-        .opacity(broker.redoEnabled ? 1 : 0.35)
-        .accessibilityLabel(Text(String(localized: "toolbar.redo")))
-
-        Button(action: onExport) {
-            Image(systemName: "square.and.arrow.up")
-                .font(.system(size: isPad ? 19 : 17, weight: .medium))
-                .frame(width: iconFrame, height: iconFrame)
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(Text(String(localized: "toolbar.export")))
-
-        Button(action: onTogglePaperLock) {
-            Image(systemName: broker.paperMovementLocked ? "lock.fill" : "lock.open.fill")
-                .font(.system(size: isPad ? 18 : 16, weight: .medium))
-                .frame(width: iconFrame, height: iconFrame)
-        }
-        .buttonStyle(.plain)
-        .opacity(broker.paperMovementLocked ? 1 : 0.72)
-        .accessibilityLabel(Text(String(localized: "toolbar.paper_lock")))
+        commandButton("toolbar.undo", icon: "arrow.uturn.backward", action: onUndo)
+            .disabled(!broker.undoEnabled)
+            .opacity(broker.undoEnabled ? 1 : 0.35)
+        commandButton("toolbar.redo", icon: "arrow.uturn.forward", action: onRedo)
+            .disabled(!broker.redoEnabled)
+            .opacity(broker.redoEnabled ? 1 : 0.35)
+        commandButton("toolbar.export", icon: "square.and.arrow.up", action: onExport)
+        commandButton(broker.paperMovementLocked ? "toolbar.paper_unlock" : "toolbar.paper_lock", icon: broker.paperMovementLocked ? "lock.fill" : "lock.open.fill",
+                      compact: true, action: onTogglePaperLock)
+            .opacity(broker.paperMovementLocked ? 1 : 0.72)
 
         Button {
             showColorPicker = false
@@ -572,10 +484,9 @@ struct CanvasFloatingToolbar: View {
                 .frame(width: iconFrame, height: iconFrame)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(Text(String(localized: "toolbar.infinity_a11y")))
+        .accessibilityLabel(Text(String(localized: "toolbar.more")))
         .accessibilityHint(Text(String(localized: "toolbar.infinity_a11y_hint")))
-        .padding(.trailing, isVertical ? 0 : 2)
-        .padding(.bottom, isVertical ? 4 : 0)
+        .padding(.trailing, 2)
         .popover(isPresented: $showInfinityMenu, attachmentAnchor: .rect(.bounds), arrowEdge: popoverArrow) {
             InfinityToolbarPopover(
                 isPad: isPad,
@@ -615,12 +526,17 @@ struct CanvasFloatingToolbar: View {
             .presentationCompactAdaptation(.popover)
         }
 
-        Button(action: onSettings) {
-            Image(systemName: "gearshape")
-                .font(.system(size: isPad ? 18 : 16, weight: .medium))
+        commandButton("toolbar.settings", icon: "gearshape", compact: true, action: onSettings)
+    }
+
+    private func commandButton(_ titleKey: String, icon: String, compact: Bool = false,
+                               action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: icon)
+                .font(.system(size: (isPad ? 19 : 17) - (compact ? 1 : 0), weight: .medium))
                 .frame(width: iconFrame, height: iconFrame)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(Text(String(localized: "toolbar.settings")))
+        .accessibilityLabel(Text(String(localized: String.LocalizationValue(titleKey))))
     }
 }
