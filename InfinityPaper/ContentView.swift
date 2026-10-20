@@ -9,29 +9,25 @@ import SwiftUI
 
 struct ContentView: View {
 
-    var body: some View {
-        ZStack {
-            TapeCanvasView()
-            .ignoresSafeArea()
-        }
-    }
+    var body: some View { DrawingLibraryView() }
 }
 
-private struct ToolbarSizePreferenceKey: PreferenceKey {
-    static var defaultValue: CGSize = CGSize(width: 340, height: 52)
-    static func reduce(value: inout CGSize, nextValue: () -> CGSize) {
-        value = nextValue()
-    }
-}
+struct TapeCanvasView: View {
+    let document: DrawingDocument
+    let sessionURL: URL
+    let onClose: (Bool) -> Void
+    @State private var closing = false
+    @State private var closeError: String?
 
-private struct TapeCanvasView: View {
     @StateObject private var toolbarBroker = CanvasToolbarStateBroker()
     @State private var showSettings = false
+    @AppStorage(AppSettings.pencilOnly) private var pencilOnly = false
+    private var pencilOnlyMode: Bool {
+        CanvasInputPolicy.pencilOnly(requested: pencilOnly, supportsPencil: UIDevice.current.userInterfaceIdiom == .pad)
+    }
     @AppStorage("firstUseOrientationDismissed") private var firstUseOrientationDismissed = false
 
-    @State private var toolbarMeasuredSize: CGSize = ToolbarSizePreferenceKey.defaultValue
     @State private var showClearCanvasConfirmation = false
-    @State private var showNewSpaceConfirmation = false
     @State private var chromeHiddenForFocus = false
 
 
@@ -39,19 +35,20 @@ private struct TapeCanvasView: View {
         ZStack {
             TapeCanvasRepresentable(
                 toolbarBroker: toolbarBroker,
+                sessionURL: sessionURL,
                 onOpenFullSettings: { DispatchQueue.main.async { showSettings = true } }
             )
-            .ignoresSafeArea()
+            .ignoresSafeArea(edges: .bottom)
 
             GeometryReader { _ in
                 VStack {
                     Spacer(minLength: 0)
                     if !firstUseOrientationDismissed {
                         VStack(spacing: 10) {
-                            Text(NSLocalizedString("first_use.lead", comment: "First session one-line hint"))
+                            Text(NSLocalizedString(pencilOnlyMode ? "first_use.pencil_lead" : "first_use.lead", comment: "First session one-line hint"))
                                 .font(.footnote)
                                 .foregroundStyle(.secondary)
-                            Text(NSLocalizedString("first_use.body", comment: "First session second line"))
+                            Text(NSLocalizedString(pencilOnlyMode ? "first_use.pencil_body" : "first_use.body", comment: "First session second line"))
                                 .font(.caption)
                                 .foregroundStyle(.tertiary)
                                 .multilineTextAlignment(.center)
@@ -74,104 +71,84 @@ private struct TapeCanvasView: View {
             }
             .allowsHitTesting(!chromeHiddenForFocus)
 
-            GeometryReader { geo in
-                let safe = geo.safeAreaInsets
-                let isiPhonePortrait = UIDevice.current.userInterfaceIdiom == .phone && geo.size.height > geo.size.width
-                let display = CGPoint(
-                    x: geo.size.width / 2,
-                    y: safe.top + 11 + toolbarMeasuredSize.height / 2
-                        + (isiPhonePortrait ? toolbarMeasuredSize.height : 0)
-                )
-
-                ZStack {
-                    Color.clear
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .allowsHitTesting(false)
-
-                    CanvasFloatingToolbar(
-                        broker: toolbarBroker,
-                        onSelectColor: { idx in
-                            toolbarBroker.canvas?.toolbarSelectColor(at: idx)
-                        },
-                        onSelectLineWidthPreset: { idx in
-                            toolbarBroker.canvas?.toolbarSetLineWidthPreset(at: idx)
-                        },
-                        onUndo: {
-                            toolbarBroker.canvas?.toolbarUndo()
-                        },
-                        onRedo: {
-                            toolbarBroker.canvas?.toolbarRedo()
-                        },
-                        onExport: {
-                            toolbarBroker.canvas?.toolbarExport()
-                        },
-                        onSettings: {
-                            toolbarBroker.canvas?.toolbarOpenFullSettings()
-                        },
-                        onTogglePaperLock: {
-                            DispatchQueue.main.async {
-                                guard let canvas = toolbarBroker.canvas else { return }
-                                canvas.toolbarSetPaperMovementLocked(!canvas.toolbarPaperMovementLocked)
-                            }
-                        },
-                        onInfinityClearCanvas: {
-                            DispatchQueue.main.async {
-                                showClearCanvasConfirmation = true
-                            }
-                        },
-                        onInfinityNewSpace: {
-                            DispatchQueue.main.async {
-                                showNewSpaceConfirmation = true
-                            }
-                        },
-                        onInfinityCenterView: {
-                            DispatchQueue.main.async {
-                                toolbarBroker.canvas?.toolbarCenterViewOnContent()
-                            }
-                        },
-                        onInfinityFocusMode: {
-                            withAnimation(.easeOut(duration: 0.28)) {
-                                chromeHiddenForFocus = true
-                            }
-                        },
-                        onInfinityZoomIn: {
-                            DispatchQueue.main.async {
-                                toolbarBroker.canvas?.toolbarZoomIn()
-                            }
-                        },
-                        onInfinityZoomOut: {
-                            DispatchQueue.main.async {
-                                toolbarBroker.canvas?.toolbarZoomOut()
-                            }
-                        },
-                        onInfinityResetView: {
-                            DispatchQueue.main.async {
-                                toolbarBroker.canvas?.toolbarResetView()
-                            }
-                        },
-                        onInfinityFitContent: {
-                            DispatchQueue.main.async {
-                                toolbarBroker.canvas?.toolbarFitContent()
-                            }
-                        }
-                    )
-                    .frame(maxWidth: max(0, geo.size.width - safe.leading - safe.trailing - 16))
-                    .background(
-                        GeometryReader { g in
-                            Color.clear.preference(
-                                key: ToolbarSizePreferenceKey.self,
-                                value: g.size
-                            )
-                        }
-                    )
-                    .position(display)
-                    .allowsHitTesting(true)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            }
-            .opacity(chromeHiddenForFocus ? 0 : 1)
-            .allowsHitTesting(!chromeHiddenForFocus)
         }
+        .safeAreaInset(edge: .top, spacing: 0) {
+            if !chromeHiddenForFocus {
+                CanvasFloatingToolbar(
+                    broker: toolbarBroker,
+                    onMyDrawings: { closeDrawing(newDrawing: false) },
+                    onSelectColor: { idx in
+                        toolbarBroker.canvas?.toolbarSelectColor(at: idx)
+                    },
+                    onSelectLineWidthPreset: { idx in
+                        toolbarBroker.canvas?.toolbarSetLineWidthPreset(at: idx)
+                    },
+                    onUndo: {
+                        toolbarBroker.canvas?.toolbarUndo()
+                    },
+                    onRedo: {
+                        toolbarBroker.canvas?.toolbarRedo()
+                    },
+                    onExport: {
+                        toolbarBroker.canvas?.toolbarExport()
+                    },
+                    onSettings: {
+                        toolbarBroker.canvas?.toolbarOpenFullSettings()
+                    },
+                    onTogglePaperLock: {
+                        DispatchQueue.main.async {
+                            guard let canvas = toolbarBroker.canvas else { return }
+                            canvas.toolbarSetPaperMovementLocked(!canvas.toolbarPaperMovementLocked)
+                        }
+                    },
+                    onInfinityClearCanvas: {
+                        DispatchQueue.main.async {
+                            showClearCanvasConfirmation = true
+                        }
+                    },
+                    onInfinityNewSpace: {
+                        DispatchQueue.main.async {
+                            closeDrawing(newDrawing: true)
+                        }
+                    },
+                    onInfinityCenterView: {
+                        DispatchQueue.main.async {
+                            toolbarBroker.canvas?.toolbarCenterViewOnContent()
+                        }
+                    },
+                    onInfinityFocusMode: {
+                        withAnimation(.easeOut(duration: 0.28)) {
+                            chromeHiddenForFocus = true
+                        }
+                    },
+                    onInfinityZoomIn: {
+                        DispatchQueue.main.async {
+                            toolbarBroker.canvas?.toolbarZoomIn()
+                        }
+                    },
+                    onInfinityZoomOut: {
+                        DispatchQueue.main.async {
+                            toolbarBroker.canvas?.toolbarZoomOut()
+                        }
+                    },
+                    onInfinityResetView: {
+                        DispatchQueue.main.async {
+                            toolbarBroker.canvas?.toolbarResetView()
+                        }
+                    },
+                    onInfinityFitContent: {
+                        DispatchQueue.main.async {
+                            toolbarBroker.canvas?.toolbarFitContent()
+                        }
+                    }
+                )
+                .disabled(closing)
+                .padding(.horizontal, 8)
+                .padding(.top, 6)
+                .padding(.bottom, 8)
+            }
+        }
+        .background(Color(uiColor: PaperSurface.adaptiveBackgroundColor).ignoresSafeArea())
         .overlay(alignment: .bottom) {
             if chromeHiddenForFocus {
                 Button {
@@ -190,7 +167,8 @@ private struct TapeCanvasView: View {
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
-        .onPreferenceChange(ToolbarSizePreferenceKey.self) { toolbarMeasuredSize = $0 }
+        .overlay { if closing { ProgressView("Saving drawing…").padding().background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12)) } }
+        .accessibilityLabel(document.title)
         .confirmationDialog(
             String(localized: "toolbar.clear_confirm_title"),
             isPresented: $showClearCanvasConfirmation,
@@ -203,21 +181,15 @@ private struct TapeCanvasView: View {
         } message: {
             Text(String(localized: "toolbar.clear_confirm_message"))
         }
-        .confirmationDialog(
-            String(localized: "toolbar.new_space_confirm_title"),
-            isPresented: $showNewSpaceConfirmation,
-            titleVisibility: .visible
-        ) {
-            Button(String(localized: "toolbar.new_space_confirm_action"), role: .destructive) {
-                toolbarBroker.canvas?.toolbarPerformNewSpace()
-            }
-            Button(String(localized: "action.cancel"), role: .cancel) {}
-        } message: {
-            Text(String(localized: "toolbar.new_space_confirm_message"))
-        }
+        .alert("Could not save drawing", isPresented: Binding(get: { closeError != nil }, set: { if !$0 { closeError = nil } })) {
+            Button("OK", role: .cancel) { closeError = nil }
+        } message: { Text(closeError ?? "") }
         .sheet(isPresented: $showSettings) {
             if let cv = toolbarBroker.canvas {
                 SettingsView(
+                    referenceImage: cv.referenceImage,
+                    referenceViewport: cv.referenceViewport,
+                    onReferenceChanged: { cv.setReferenceImage($0) },
                     palette: cv.exposedPrimaryPalette,
                     currentColorIndex: cv.toolbarSelectedPaletteIndex,
                     currentLineWidth: cv.toolbarBaseLineWidth,
@@ -227,6 +199,9 @@ private struct TapeCanvasView: View {
                     onLineWidthChanged: { width in
                         cv.setBaseLineWidthFromSettings(width)
                     },
+                    currentPattern: cv.paperPattern,
+                    currentSpacing: cv.paperSpacing,
+                    onPatternChanged: { pattern, spacing in cv.setPaperPattern(pattern, spacing: spacing) },
                     onLoadPreviousSession: {
                         cv.loadSessionFromSettings()
                     },
@@ -238,14 +213,27 @@ private struct TapeCanvasView: View {
             }
         }
     }
+    private func closeDrawing(newDrawing: Bool) {
+        guard !closing, let canvas = toolbarBroker.canvas else { return }
+        closing = true
+        canvas.saveForLibrary { result in
+            closing = false
+            switch result {
+            case .success: onClose(newDrawing)
+            case .failure(let error): closeError = error.localizedDescription
+            }
+        }
+    }
+
 }
 
 private struct TapeCanvasRepresentable: UIViewRepresentable {
     @ObservedObject var toolbarBroker: CanvasToolbarStateBroker
+    let sessionURL: URL
     var onOpenFullSettings: () -> Void
 
     func makeUIView(context: Context) -> TapeCanvasUIView {
-        let view = TapeCanvasUIView()
+        let view = TapeCanvasUIView(sessionURL: sessionURL)
         view.onOpenFullSettings = onOpenFullSettings
         view.onToolbarStateChange = { [weak toolbarBroker] in
             toolbarBroker?.syncFromCanvas()

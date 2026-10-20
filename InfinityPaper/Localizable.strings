@@ -31,12 +31,12 @@
 "toolbar.width_a11y_heavy" = "Heavy stroke";
 "toolbar.clear_canvas" = "Clear canvas…";
 "toolbar.clear_confirm_title" = "Clear this canvas?";
-"toolbar.clear_confirm_message" = "This removes every stroke in the current session. You can’t undo this step.";
+"toolbar.clear_confirm_message" = "This removes every stroke and any reference image in this drawing. You can’t undo this step.";
 "toolbar.clear_confirm_action" = "Clear";
 "toolbar.infinity_a11y" = "Infinity";
 "toolbar.infinity_a11y_hint" = "Opens a compact menu for canvas and view actions.";
 "toolbar.infinity_clear" = "Clear canvas…";
-"toolbar.infinity_new_space" = "New space…";
+"toolbar.infinity_new_space" = "New drawing";
 "toolbar.infinity_center" = "Center view";
 "toolbar.infinity_zoom_in" = "Zoom in";
 "toolbar.infinity_zoom_out" = "Zoom out";
@@ -63,3 +63,9 @@
 "alert.clear_message" = "This will remove all strokes in current session. This cannot be undone.";
 
 "toolbar.paper_unlock" = "Unlock paper movement";
+
+"toolbar.my_drawings" = "My drawings";
+
+"first_use.pencil_lead" = "Draw with Apple Pencil, the paper moves by itself.";
+"first_use.pencil_body" = "Use one finger to move the paper or two fingers to zoom. Double-tap with two fingers to reset the view. Tools live in the top bar.";
+"accessibility.canvas_hint_pencil" = "Draw with Apple Pencil. Use one finger to move the paper and two fingers to zoom. Drawing tools and settings are in the top bar.";

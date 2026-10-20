@@ -15,6 +15,9 @@ nonisolated struct StoredSession: Codable, Sendable {
     var savedAt: TimeInterval
     var formatVersion: Int? = nil
     var zoomScale: CGFloat? = nil
+    var paperPattern: PaperPattern? = nil
+    var paperSpacing: CGFloat? = nil
+    var referenceImage: ReferenceImage? = nil
 }
 
 nonisolated struct StoredSegment: Codable, Sendable {
@@ -27,6 +30,7 @@ nonisolated struct StoredStroke: Codable, Sendable {
     var times: [TimeInterval]?
     var color: StoredColor
     var lineWidth: CGFloat
+    var widthScales: [CGFloat]? = nil
 }
 
 nonisolated struct StoredPoint: Codable, Sendable {
@@ -77,8 +81,10 @@ nonisolated enum SessionPersistence {
         guard (1...2).contains(session.formatVersion ?? 1) else { throw ValidationError.unsupportedVersion }
         func coordinate(_ value: CGFloat) -> Bool { value.isFinite && abs(value) <= CanvasGeometry.coordinateLimit }
         guard coordinate(session.contentOffset.x), coordinate(session.contentOffset.y), session.savedAt.isFinite,
+              session.paperSpacing.map({ $0.isFinite && PaperPatternLayout.spacingRange.contains($0) }) ?? true,
               session.zoomScale.map({ $0.isFinite && $0 >= CanvasGeometry.minimumZoom && $0 <= 100 }) ?? true,
               Set(session.segments.map(\.id)).count == session.segments.count else { throw ValidationError.invalidDrawing }
+        try session.referenceImage?.validate()
         for segment in session.segments {
             for stroke in segment.strokes {
                 let color = stroke.color
@@ -86,7 +92,8 @@ nonisolated enum SessionPersistence {
                       stroke.lineWidth.isFinite, stroke.lineWidth > 0, stroke.lineWidth <= 100,
                       [color.red, color.green, color.blue, color.alpha].allSatisfy({ $0.isFinite && (0...1).contains($0) }),
                       stroke.points.allSatisfy({ coordinate($0.x) && coordinate($0.y) }),
-                      stroke.times?.allSatisfy({ $0.isFinite }) ?? true else { throw ValidationError.invalidDrawing }
+                      stroke.times?.allSatisfy({ $0.isFinite }) ?? true,
+                      stroke.widthScales.map({ $0.count == stroke.points.count && $0.allSatisfy { $0.isFinite && PencilStrokeWidth.scaleRange.contains($0) } }) ?? true else { throw ValidationError.invalidDrawing }
             }
         }
     }

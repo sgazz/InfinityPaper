@@ -6,6 +6,7 @@ struct TapeSessionStroke {
     var times: [TimeInterval]
     var color: UIColor
     var lineWidth: CGFloat
+    var widthScales: [CGFloat] = []
 }
 
 /// In-memory identity of a snapshot. Replaced on clear/load, never persisted.
@@ -22,16 +23,25 @@ final class TapeCanvasSessionState {
     private var revision: UInt64 = 0
     private(set) var hasUnsavedChanges = false
     var persistenceRevision: SessionRevision { SessionRevision(generation: generation, value: revision) }
+    private(set) var referenceImage: ReferenceImage?
     private var strokes: [UUID: TapeSessionStroke] = [:]
     private var drawingOrder: [UUID] = []
     private var orderIndex: [UUID: Int] = [:]
     private var boundsByID: [UUID: CGRect] = [:]
     private var columnsByID: [UUID: [Int]] = [:]
     private var columnIndex: [Int: Set<UUID>] = [:]
-    private var undoIDs: [UUID] = []
-    private var redoStrokes: [TapeSessionStroke] = []
-    var canUndo: Bool { !undoIDs.isEmpty }
-    var canRedo: Bool { !redoStrokes.isEmpty }
+    private enum Edit {
+        case reference(before: ReferenceImage?, after: ReferenceImage?)
+        case add([TapeSessionStroke])
+        case move(before: [TapeSessionStroke], after: [TapeSessionStroke])
+        case erase([(index: Int, stroke: TapeSessionStroke)])
+    }
+    private var undoHistory: [Edit] = []
+    private var redoHistory: [Edit] = []
+    private var erasePositions: [UUID: Int]?
+    private var erasedStrokes: [(index: Int, stroke: TapeSessionStroke)] = []
+    var canUndo: Bool { !undoHistory.isEmpty }
+    var canRedo: Bool { !redoHistory.isEmpty }
     var orderedStrokes: [TapeSessionStroke] { drawingOrder.compactMap { strokes[$0] } }
 
     func clear() {
@@ -41,14 +51,17 @@ final class TapeCanvasSessionState {
     }
 
     private func removeDrawing() {
+        referenceImage = nil
         strokes.removeAll()
         drawingOrder.removeAll()
         orderIndex.removeAll()
         boundsByID.removeAll()
         columnsByID.removeAll()
         columnIndex.removeAll()
-        undoIDs.removeAll()
-        redoStrokes.removeAll()
+        undoHistory.removeAll()
+        redoHistory.removeAll()
+        erasePositions = nil
+        erasedStrokes.removeAll()
     }
 
     /// Also tracks active-stroke samples, so an in-flight snapshot cannot acknowledge newer samples.
@@ -62,7 +75,7 @@ final class TapeCanvasSessionState {
         hasUnsavedChanges = false
     }
 
-    func visibleStrokes(in viewport: CGRect) -> [TapeSessionStroke] {
+    func visibleStrokes(in viewport: CGRect, including includedIDs: Set<UUID> = []) -> [TapeSessionStroke] {
         var ids = Set<UUID>()
         let first = Int(floor(viewport.minX / Self.segmentWidth))
         let last = Int(floor(viewport.maxX / Self.segmentWidth))
@@ -71,7 +84,8 @@ final class TapeCanvasSessionState {
         } else {
             for (column, strokes) in columnIndex where column >= first && column <= last { ids.formUnion(strokes) }
         }
-        return ids.filter { boundsByID[$0]?.intersects(viewport) == true }
+        ids.formUnion(includedIDs)
+        return ids.filter { includedIDs.contains($0) || boundsByID[$0]?.intersects(viewport) == true }
             .sorted { (orderIndex[$0] ?? 0) < (orderIndex[$1] ?? 0) }
             .compactMap { strokes[$0] }
     }
@@ -93,7 +107,7 @@ final class TapeCanvasSessionState {
     }
 
     private func paddedBounds(of stroke: TapeSessionStroke) -> CGRect? {
-        let padding = stroke.lineWidth * 0.75 + 3
+        let padding = PencilStrokeWidth.radius(lineWidth: stroke.lineWidth, scales: stroke.widthScales) + 3
         return rawBounds(of: stroke)?.insetBy(dx: -padding, dy: -padding)
     }
 
@@ -111,13 +125,20 @@ final class TapeCanvasSessionState {
     func rawWorldBoundingRect(currentStroke: TapeSessionStroke?) -> CGRect? {
         let rects = orderedStrokes.compactMap { rawBounds(of: $0) }
             + (currentStroke.flatMap { rawBounds(of: $0) }.map { [$0] } ?? [])
-        return rects.reduce(nil as CGRect?) { $0?.union($1) ?? $1 }
+        var result = rects.reduce(nil as CGRect?) { $0?.union($1) ?? $1 }
+        if let referenceImage, referenceImage.isVisible, referenceImage.opacity > 0 {
+            result = result?.union(referenceImage.rect) ?? referenceImage.rect
+        }
+        return result
     }
 
-    func worldBoundingRectForExport(currentStroke: TapeSessionStroke?) -> CGRect? {
+    func worldBoundingRectForExport(currentStroke: TapeSessionStroke?, includeReference: Bool = false) -> CGRect? {
         var rect = boundsByID.values.reduce(nil as CGRect?) { $0?.union($1) ?? $1 }
         if let stroke = currentStroke, let padded = paddedBounds(of: stroke) {
             rect = rect?.union(padded) ?? padded
+        }
+        if includeReference, let referenceImage, referenceImage.isVisible, referenceImage.opacity > 0 {
+            rect = rect?.union(referenceImage.rect) ?? referenceImage.rect
         }
         return rect
     }
@@ -127,12 +148,13 @@ final class TapeCanvasSessionState {
         let drawing = orderedStrokes + (currentStroke.map { [$0] } ?? [])
         let stored = drawing.map { stroke in
             StoredStroke(points: stroke.points.map { StoredPoint(x: $0.x, y: $0.y) }, times: stroke.times,
-                         color: stroke.color.toStoredColor(), lineWidth: stroke.lineWidth)
+                         color: stroke.color.toStoredColor(), lineWidth: stroke.lineWidth,
+                         widthScales: stroke.widthScales.isEmpty ? nil : stroke.widthScales)
         }
         // Version 2 stores a single ordered sequence. The spatial grid is rebuilt, never persisted.
         return StoredSession(segments: [StoredSegment(id: 0, strokes: stored)],
                              contentOffset: StoredPoint(x: contentOffset.x, y: contentOffset.y), savedAt: savedAt,
-                             formatVersion: 2, zoomScale: zoomScale)
+                             formatVersion: 2, zoomScale: zoomScale, referenceImage: referenceImage)
     }
 
     func applyStoredSession(_ session: StoredSession) throws {
@@ -141,47 +163,189 @@ final class TapeCanvasSessionState {
         let segments = (session.formatVersion ?? 1) < 2 ? session.segments.sorted { $0.id < $1.id } : session.segments
         let drawing = segments.flatMap { $0.strokes }.map { stroke in
             TapeSessionStroke(points: stroke.points.map { CGPoint(x: $0.x, y: $0.y) }, times: stroke.times ?? [],
-                              color: stroke.color.toUIColor(), lineWidth: stroke.lineWidth)
+                              color: stroke.color.toUIColor(), lineWidth: stroke.lineWidth, widthScales: stroke.widthScales ?? [])
         }
         removeDrawing()
         for stroke in drawing { insert(stroke) }
+        referenceImage = session.referenceImage
         generation = UUID()
         revision &+= 1
         hasUnsavedChanges = false
     }
 
+    private func record(_ edit: Edit) {
+        undoHistory.append(edit)
+        if undoHistory.count > Self.historyLimit { undoHistory.removeFirst() }
+        redoHistory.removeAll()
+    }
+
+    private func rebuild(_ drawing: [TapeSessionStroke]) {
+        strokes.removeAll(); drawingOrder.removeAll(); orderIndex.removeAll()
+        boundsByID.removeAll(); columnsByID.removeAll(); columnIndex.removeAll()
+        for stroke in drawing { insert(stroke) }
+    }
+
     func commitCompletedStroke(_ stroke: TapeSessionStroke) {
         guard !stroke.points.isEmpty, strokes[stroke.id] == nil else { return }
+        endErasing()
         insert(stroke)
-        undoIDs.append(stroke.id)
-        if undoIDs.count > Self.historyLimit { undoIDs.removeFirst() }
-        redoStrokes.removeAll()
+        record(.add([stroke]))
+        noteMutationForPersistence()
+    }
+
+    func beginErasing() {
+        guard erasePositions == nil else { return }
+        erasePositions = orderIndex
+        erasedStrokes.removeAll()
+    }
+
+    @discardableResult
+    func erase(from start: CGPoint, to end: CGPoint, radius: CGFloat) -> Bool {
+        beginErasing()
+        let area = CGRect(x: min(start.x, end.x) - radius, y: min(start.y, end.y) - radius,
+                          width: abs(end.x - start.x) + 2 * radius, height: abs(end.y - start.y) + 2 * radius)
+        let hits = visibleStrokes(in: area).filter {
+            CanvasStrokeHitTesting.intersects(points: CanvasStrokeGeometry.smoothedPoints(for: $0.points, passes: 2), from: start, to: end,
+                                              radius: radius + PencilStrokeWidth.radius(lineWidth: $0.lineWidth, scales: $0.widthScales))
+        }
+        guard !hits.isEmpty else { return false }
+        for stroke in hits { erasedStrokes.append((erasePositions?[stroke.id] ?? 0, stroke)) }
+        let removed = Set(hits.map(\.id))
+        rebuild(orderedStrokes.filter { !removed.contains($0.id) })
+        noteMutationForPersistence()
+        return true
+    }
+
+    func endErasing() {
+        guard erasePositions != nil else { return }
+        if !erasedStrokes.isEmpty { record(.erase(erasedStrokes.sorted { $0.index < $1.index })) }
+        erasePositions = nil
+        erasedStrokes.removeAll()
+    }
+
+    func selectionBounds(for ids: Set<UUID>) -> CGRect? {
+        ids.compactMap { boundsByID[$0] }.reduce(nil as CGRect?) { $0?.union($1) ?? $1 }
+    }
+
+    func selectionCoordinateBounds(for ids: Set<UUID>) -> CGRect? {
+        CanvasSelectionGeometry.bounds(of: drawingOrder.filter { ids.contains($0) }.compactMap { strokes[$0] }.flatMap(\.points))
+    }
+
+    func strokesIntersectingLasso(_ polygon: [CGPoint]) -> Set<UUID> {
+        guard polygon.count >= 3, let bounds = CanvasSelectionGeometry.bounds(of: polygon),
+              bounds.width > 0, bounds.height > 0 else { return [] }
+        return Set(visibleStrokes(in: bounds).filter {
+            CanvasSelectionGeometry.intersects(points: CanvasStrokeGeometry.smoothedPoints(for: $0.points, passes: 2), polygon: polygon)
+        }.map(\.id))
+    }
+
+    func stroke(at point: CGPoint, radius: CGFloat) -> UUID? {
+        visibleStrokes(in: CGRect(x: point.x - radius, y: point.y - radius, width: radius * 2, height: radius * 2))
+            .reversed().first {
+                CanvasStrokeHitTesting.intersects(points: CanvasStrokeGeometry.smoothedPoints(for: $0.points, passes: 2),
+                    from: point, to: point, radius: radius + PencilStrokeWidth.radius(lineWidth: $0.lineWidth, scales: $0.widthScales))
+            }?.id
+    }
+
+    @discardableResult
+    func moveSelection(_ ids: Set<UUID>, by proposed: CGPoint) -> Bool {
+        endErasing()
+        guard let bounds = selectionCoordinateBounds(for: ids) else { return false }
+        let delta = CanvasSelectionGeometry.clampedTranslation(proposed, bounds: bounds)
+        guard abs(delta.x) > 1e-8 || abs(delta.y) > 1e-8 else { return false }
+        let before = orderedStrokes.filter { ids.contains($0.id) }
+        let after = before.map { translated($0, by: delta) }
+        let edit = Edit.move(before: before, after: after)
+        record(edit)
+        apply(edit, undo: false)
+        return true
+    }
+
+    @discardableResult
+    func duplicateSelection(_ ids: Set<UUID>, offset proposed: CGPoint) -> Set<UUID> {
+        endErasing()
+        guard let bounds = selectionCoordinateBounds(for: ids) else { return [] }
+        let delta = CanvasSelectionGeometry.clampedTranslation(proposed, bounds: bounds)
+        let copies = orderedStrokes.filter { ids.contains($0.id) }.map { stroke -> TapeSessionStroke in
+            var copy = translated(stroke, by: delta)
+            copy.id = UUID()
+            return copy
+        }
+        let edit = Edit.add(copies)
+        record(edit)
+        apply(edit, undo: false)
+        return Set(copies.map(\.id))
+    }
+
+    @discardableResult
+    func deleteSelection(_ ids: Set<UUID>) -> Bool {
+        endErasing()
+        let removed = orderedStrokes.enumerated().compactMap { index, stroke in
+            ids.contains(stroke.id) ? (index: index, stroke: stroke) : nil
+        }
+        guard !removed.isEmpty else { return false }
+        let edit = Edit.erase(removed)
+        record(edit)
+        apply(edit, undo: false)
+        return true
+    }
+
+    private func translated(_ stroke: TapeSessionStroke, by delta: CGPoint) -> TapeSessionStroke {
+        var result = stroke
+        result.points = stroke.points.map { CGPoint(x: $0.x + delta.x, y: $0.y + delta.y) }
+        return result
+    }
+
+    func setReferenceImage(_ reference: ReferenceImage?) throws {
+        try reference?.validate()
+        guard reference != referenceImage else { return }
+        let edit = Edit.reference(before: referenceImage, after: reference)
+        record(edit)
+        apply(edit, undo: false)
+    }
+
+    private func apply(_ edit: Edit, undo: Bool) {
+        var drawing = orderedStrokes
+        switch edit {
+        case .reference(let before, let after): referenceImage = undo ? before : after
+        case .add(let added):
+            if undo {
+                let ids = Set(added.map(\.id))
+                drawing.removeAll { ids.contains($0.id) }
+            } else { drawing.append(contentsOf: added) }
+        case .move(let before, let after):
+            let replacements = Dictionary(uniqueKeysWithValues: (undo ? before : after).map { ($0.id, $0) })
+            drawing = drawing.map { replacements[$0.id] ?? $0 }
+        case .erase(let removed):
+            if undo {
+                for item in removed { drawing.insert(item.stroke, at: min(item.index, drawing.count)) }
+            } else {
+                let ids = Set(removed.map { $0.stroke.id })
+                drawing.removeAll { ids.contains($0.id) }
+            }
+        }
+        rebuild(drawing)
         noteMutationForPersistence()
     }
 
     @discardableResult
     func undoLastStroke() -> Bool {
-        guard let id = undoIDs.popLast(), let stroke = strokes.removeValue(forKey: id) else { return false }
-        drawingOrder.removeLast()
-        orderIndex.removeValue(forKey: id)
-        boundsByID.removeValue(forKey: id)
-        for column in columnsByID.removeValue(forKey: id) ?? [] {
-            columnIndex[column]?.remove(id)
-            if columnIndex[column]?.isEmpty == true { columnIndex.removeValue(forKey: column) }
-        }
-        redoStrokes.append(stroke)
-        noteMutationForPersistence()
+        endErasing()
+        guard let edit = undoHistory.popLast() else { return false }
+        apply(edit, undo: true)
+        redoHistory.append(edit)
         return true
     }
 
     @discardableResult
     func redoLastStroke() -> Bool {
-        guard let stroke = redoStrokes.popLast() else { return false }
-        insert(stroke)
-        undoIDs.append(stroke.id)
-        noteMutationForPersistence()
+        endErasing()
+        guard let edit = redoHistory.popLast() else { return false }
+        apply(edit, undo: false)
+        undoHistory.append(edit)
         return true
     }
+
 }
 
 extension UIColor {

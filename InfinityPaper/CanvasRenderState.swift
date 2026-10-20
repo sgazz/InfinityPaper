@@ -53,12 +53,15 @@ final class CanvasRenderState {
 
     func drawStrokes(in context: CGContext, session: TapeCanvasSessionState,
                      currentStroke: TapeSessionStroke?, viewport: CanvasViewport,
-                     size: CGSize, visibleOnly: Bool) {
+                     size: CGSize, visibleOnly: Bool, movingIDs: Set<UUID> = [], translation: CGPoint = .zero) {
         context.setLineCap(.round)
         context.setLineJoin(.round)
-        let strokes = visibleOnly ? session.visibleStrokes(in: viewport.worldRect(for: size)) : session.orderedStrokes
+        let strokes = visibleOnly ? session.visibleStrokes(in: viewport.worldRect(for: size), including: movingIDs) : session.orderedStrokes
         for stroke in strokes {
+            context.saveGState()
+            if movingIDs.contains(stroke.id) { context.translateBy(x: translation.x, y: translation.y) }
             if let prepared = preparedStroke(for: stroke) { CanvasRenderer.drawPreparedStrokeWorld(prepared, in: context) }
+            context.restoreGState()
         }
         if let stroke = currentStroke { CanvasRenderer.drawStrokeWorld(renderStroke(stroke), in: context) }
     }
@@ -72,6 +75,6 @@ final class CanvasRenderState {
     }
 
     private func renderStroke(_ stroke: TapeSessionStroke) -> RenderStroke {
-        RenderStroke(points: stroke.points, times: stroke.times, color: stroke.color, lineWidth: stroke.lineWidth)
+        RenderStroke(points: stroke.points, times: stroke.times, color: stroke.color, lineWidth: stroke.lineWidth, widthScales: stroke.widthScales)
     }
 }

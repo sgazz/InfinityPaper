@@ -2,7 +2,7 @@ import Foundation
 
 /// Every file operation uses one ordered queue, including deletion and recovery copies.
 nonisolated final class SessionFileStore: @unchecked Sendable {
-    private static let sharedQueue = DispatchQueue(label: "com.infinitypaper.sessionIO", qos: .utility)
+    static let sharedQueue = DispatchQueue(label: "com.infinitypaper.sessionIO", qos: .utility)
     private let url: URL
     private let queue: DispatchQueue
     private var checkedOriginalBackup = false
