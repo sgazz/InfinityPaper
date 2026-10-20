@@ -3,6 +3,11 @@ import SwiftUI
 struct SettingsView: View {
     // MARK: - Brush, export and session settings
     @Environment(\.colorScheme) private var colorScheme
+    @State private var showReference = false
+    @State private var referenceImage: ReferenceImage?
+    let referenceViewport: CGRect
+    let onReferenceChanged: (ReferenceImage?) -> Void
+    @AppStorage(AppSettings.includeReferenceImage) private var includeReferenceImage = true
     @State private var selectedColorIndex: Int
     @State private var baseLineWidth: CGFloat
     @AppStorage(AppSettings.exportFull) private var exportFullDrawing = false
@@ -15,7 +20,15 @@ struct SettingsView: View {
     @AppStorage(AppSettings.prefix) private var exportPrefix = AppSettings.Default.prefix
     @AppStorage(AppSettings.autosaveMode) private var autosaveMode = AppSettings.Default.autosaveMode
     @AppStorage(AppSettings.autoload) private var autoloadOnLaunch = AppSettings.Default.autoload
+    @AppStorage(AppSettings.pencilOnly) private var pencilOnly = false
+    @AppStorage(AppSettings.pencilPressure) private var pencilPressure = true
+    @AppStorage(AppSettings.pencilTilt) private var pencilTilt = false
+    @AppStorage(AppSettings.pencilSensitivity) private var pencilSensitivity = 0.5
     @State private var paperSurface: PaperSurface
+    @State private var paperPattern: PaperPattern
+    @State private var paperSpacing: CGFloat
+    @AppStorage(AppSettings.includePaperPattern) private var includePaperPattern = true
+    let onPatternChanged: (PaperPattern, CGFloat) -> Void
 
     let palette: [UIColor]
     let onSelectColor: (Int) -> Void
@@ -24,14 +37,26 @@ struct SettingsView: View {
     let onDismiss: () -> Void
 
     init(
+        referenceImage: ReferenceImage?,
+        referenceViewport: CGRect,
+        onReferenceChanged: @escaping (ReferenceImage?) -> Void,
         palette: [UIColor],
         currentColorIndex: Int,
         currentLineWidth: CGFloat,
         onSelectColor: @escaping (Int) -> Void,
         onLineWidthChanged: @escaping (CGFloat) -> Void,
+        currentPattern: PaperPattern,
+        currentSpacing: CGFloat,
+        onPatternChanged: @escaping (PaperPattern, CGFloat) -> Void,
         onLoadPreviousSession: @escaping () -> Void,
         onDismiss: @escaping () -> Void
     ) {
+        _referenceImage = State(initialValue: referenceImage)
+        self.referenceViewport = referenceViewport
+        self.onReferenceChanged = onReferenceChanged
+        _paperPattern = State(initialValue: currentPattern)
+        _paperSpacing = State(initialValue: currentSpacing)
+        self.onPatternChanged = onPatternChanged
         self.palette = palette
         self.onSelectColor = onSelectColor
         self.onLineWidthChanged = onLineWidthChanged
@@ -56,6 +81,22 @@ struct SettingsView: View {
                     .onChange(of: paperSurface) { _, newValue in
                         PaperSurface.setCurrent(newValue)
                     }
+                    Picker("Guides", selection: $paperPattern) {
+                        ForEach(PaperPattern.allCases, id: \.self) { pattern in Text(pattern.title).tag(pattern) }
+                    }
+                    .onChange(of: paperPattern) { _, value in onPatternChanged(value, paperSpacing) }
+                    if paperPattern != .plain {
+                        VStack(alignment: .leading) {
+                            Text("Guide spacing: \(Int(paperSpacing)) pt")
+                            Slider(value: $paperSpacing, in: PaperPatternLayout.spacingRange, step: 4)
+                                .accessibilityLabel("Guide spacing")
+                                .onChange(of: paperSpacing) { _, value in onPatternChanged(paperPattern, value) }
+                        }
+                    }
+                }
+
+                Section("Reference image") {
+                    Button(referenceImage == nil ? "Import reference image" : "Edit reference image", systemImage: "photo.on.rectangle") { showReference = true }
                 }
 
                 Section(header: Text("Brush & Canvas")) {
@@ -63,11 +104,13 @@ struct SettingsView: View {
                     lineWidthSection
                 }
 
+                if UIDevice.current.userInterfaceIdiom == .pad { pencilSection }
+
                 Section(header: Text("Export & Share")) {
                     exportSection
                 }
 
-                Section(header: Text("Session & Storage"), footer: Text("Session is one drawing; it is saved automatically. Clear removes it and the saved file (you’ll be asked to confirm).")) {
+                Section(header: Text("Session & Storage"), footer: Text("Each drawing is saved separately. Clear empties the current drawing after confirmation; other drawings stay in your library.")) {
                     autosaveSection
                     Button {
                         onLoadPreviousSession()
@@ -84,11 +127,38 @@ struct SettingsView: View {
                     }
                 }
             }
+            .sheet(isPresented: $showReference) {
+                ReferenceImageSettingsView(reference: referenceImage, viewport: referenceViewport) { image in
+                    referenceImage = image
+                    onReferenceChanged(image)
+                }
+            }
             .navigationTitle("Settings")
             .toolbar { ToolbarItem(placement: .primaryAction) { Button("Done") { onDismiss() } } }
         }
     }
     
+    private var pencilSection: some View {
+        Section {
+            Toggle("Draw only with Apple Pencil", isOn: $pencilOnly)
+                .onChange(of: pencilOnly) { _, _ in
+                    NotificationCenter.default.post(name: AppSettings.pencilInputDidChange, object: nil)
+                }
+            Toggle("Pressure changes line width", isOn: $pencilPressure)
+            if pencilPressure {
+                VStack(alignment: .leading) {
+                    Text("Pressure sensitivity")
+                    Slider(value: $pencilSensitivity, in: 0...1)
+                        .accessibilityLabel("Pressure sensitivity")
+                    Text("Higher sensitivity makes lighter pressure produce wider strokes.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+            }
+            Toggle("Tilt widens strokes", isOn: $pencilTilt)
+        } header: { Text("Apple Pencil") }
+        footer: { Text("In Pencil-only mode, one finger moves the paper and two fingers zoom. Pressure and tilt affect new strokes when supported by your Pencil. Turn off paper movement lock to pan.") }
+    }
+
     private var autosaveSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             Picker("Autosave mode", selection: $autosaveMode) {
@@ -103,8 +173,8 @@ struct SettingsView: View {
                 .font(.caption)
                 .foregroundColor(.secondary)
 
-            Toggle("Autoload last saved session on launch", isOn: $autoloadOnLaunch)
-            Text("When on, the last saved drawing is loaded on app launch.")
+            Toggle("Reopen last drawing on launch", isOn: $autoloadOnLaunch)
+            Text("When on, the last open drawing is reopened on app launch.")
                 .font(.caption)
                 .foregroundColor(.secondary)
         }
@@ -158,6 +228,8 @@ struct SettingsView: View {
 
     private var exportSection: some View {
         VStack(alignment: .leading, spacing: 12) {
+            Toggle("Include reference image", isOn: $includeReferenceImage)
+            Toggle("Include paper guides", isOn: $includePaperPattern)
             Toggle("Export entire drawing", isOn: $exportFullDrawing)
             Picker("Export format", selection: $exportFormat) {
                 Text("PDF").tag(ExportFormat.pdf)

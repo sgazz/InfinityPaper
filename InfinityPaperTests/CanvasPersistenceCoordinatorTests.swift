@@ -93,4 +93,69 @@ final class CanvasPersistenceCoordinatorTests: XCTestCase {
         XCTAssertFalse(state.hasUnsavedChanges)
         XCTAssertFalse(FileManager.default.fileExists(atPath: url.path))
     }
+    func testClosingWaitsForLatestRevisionAfterAnInflightSave() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let queue = DispatchQueue(label: "test.close")
+        let url = directory.appendingPathComponent("session.json")
+        let state = TapeCanvasSessionState()
+        let coordinator = CanvasPersistenceCoordinator(state: state,
+            manager: CanvasSessionManager(store: SessionFileStore(url: url, queue: queue)), makeSnapshot: {
+                state.buildStoredSession(contentOffset: .zero, savedAt: 1)
+            }, shouldDeferActiveSave: { true }, keepEmptySession: true)
+        queue.suspend()
+        state.commitCompletedStroke(stroke(0))
+        coordinator.save()
+        state.commitCompletedStroke(stroke(100))
+        let closed = expectation(description: "latest drawing safely saved")
+        coordinator.saveAndWait { result in
+            if case .failure(let error) = result { XCTFail(error.localizedDescription) }
+            XCTAssertFalse(state.hasUnsavedChanges)
+            closed.fulfill()
+        }
+        queue.resume()
+        wait(for: [closed], timeout: 5)
+        let saved = try SessionPersistence.decode(from: Data(contentsOf: url))
+        XCTAssertEqual(saved.segments[0].strokes.count, 2)
+    }
+
+    func testClosingReportsFailureAndKeepsDirtyState() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let state = TapeCanvasSessionState()
+        state.commitCompletedStroke(stroke(0))
+        let coordinator = CanvasPersistenceCoordinator(state: state,
+            manager: CanvasSessionManager(store: SessionFileStore(url: directory.appendingPathComponent("missing/session.json"))),
+            makeSnapshot: { state.buildStoredSession(contentOffset: .zero, savedAt: 1) })
+        let failed = expectation(description: "close rejected")
+        coordinator.saveAndWait { result in
+            if case .success = result { XCTFail("Reported success for a failed write") }
+            XCTAssertTrue(state.hasUnsavedChanges)
+            failed.fulfill()
+        }
+        wait(for: [failed], timeout: 5)
+    }
+
+    func testClearingDocumentKeepsAnOpenableEmptySession() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appendingPathComponent("session.json")
+        let state = TapeCanvasSessionState()
+        state.commitCompletedStroke(stroke(0))
+        let coordinator = CanvasPersistenceCoordinator(state: state,
+            manager: CanvasSessionManager(store: SessionFileStore(url: url)),
+            makeSnapshot: { state.buildStoredSession(contentOffset: .zero, savedAt: 1) }, keepEmptySession: true)
+        coordinator.clear()
+        let saved = expectation(description: "empty document saved")
+        coordinator.saveAndWait { result in
+            if case .failure(let error) = result { XCTFail(error.localizedDescription) }
+            saved.fulfill()
+        }
+        wait(for: [saved], timeout: 5)
+        let session = try SessionPersistence.decode(from: Data(contentsOf: url))
+        XCTAssertTrue(session.segments.flatMap(\.strokes).isEmpty)
+    }
+
 }

@@ -15,6 +15,9 @@ import UIKit
 final class CanvasToolbarStateBroker: ObservableObject {
     weak var canvas: TapeCanvasUIView?
 
+    @Published var canvasReady = false
+    @Published var selectedTool = CanvasTool.pen
+    @Published var selectedStrokeCount = 0
     @Published var undoEnabled: Bool = false
     @Published var redoEnabled: Bool = false
     @Published var lineWidthLabel: String = ""
@@ -44,6 +47,9 @@ final class CanvasToolbarStateBroker: ObservableObject {
 
     private func applySyncFromCanvas() {
         guard let canvas else {
+            canvasReady = false
+            selectedTool = .pen
+            selectedStrokeCount = 0
             if undoEnabled { undoEnabled = false }
             if redoEnabled { redoEnabled = false }
             if !lineWidthLabel.isEmpty { lineWidthLabel = "" }
@@ -53,6 +59,9 @@ final class CanvasToolbarStateBroker: ObservableObject {
             if strokePreviewUIColor != .darkGray { strokePreviewUIColor = .darkGray }
             return
         }
+        if canvasReady != canvas.documentReady { canvasReady = canvas.documentReady }
+        if selectedTool != canvas.selectedTool { selectedTool = canvas.selectedTool }
+        if selectedStrokeCount != canvas.selectedStrokeCount { selectedStrokeCount = canvas.selectedStrokeCount }
         let nextUndo = canvas.toolbarUndoEnabled
         if undoEnabled != nextUndo { undoEnabled = nextUndo }
         let nextRedo = canvas.toolbarRedoEnabled
@@ -226,6 +235,8 @@ private struct ToolbarLineWidthPickerBody: View {
 private struct InfinityToolbarPopover: View {
     @Environment(\.colorScheme) private var colorScheme
     let isPad: Bool
+    let canvasReady: Bool
+    let onMyDrawings: () -> Void
     let onClearCanvas: () -> Void
     let onNewSpace: () -> Void
     let onCenterView: () -> Void
@@ -254,7 +265,8 @@ private struct InfinityToolbarPopover: View {
             ForEach(Array(menuItems.enumerated()), id: \.offset) { index, item in
                 if index > 0 { divider }
                 infinityRow(titleKey: item.title, systemImage: item.icon,
-                            isDestructive: index == 0, action: item.action)
+                            isDestructive: item.title == "toolbar.infinity_clear", action: item.action)
+                    .disabled(!canvasReady && item.title != "toolbar.my_drawings")
             }
         }
         .frame(minWidth: isPad ? 220 : 196)
@@ -272,6 +284,7 @@ private struct InfinityToolbarPopover: View {
 
     private var menuItems: [(title: String, icon: String, action: () -> Void)] {
         [
+            ("toolbar.my_drawings", "square.grid.2x2", onMyDrawings),
             ("toolbar.infinity_clear", "trash", onClearCanvas),
             ("toolbar.infinity_new_space", "square.dashed", onNewSpace),
             ("toolbar.infinity_center", "scope", onCenterView),
@@ -321,6 +334,7 @@ struct CanvasFloatingToolbar: View {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.colorScheme) private var colorScheme
 
+    var onMyDrawings: () -> Void
     var onSelectColor: (Int) -> Void
     var onSelectLineWidthPreset: (Int) -> Void
     var onUndo: () -> Void
@@ -377,8 +391,12 @@ struct CanvasFloatingToolbar: View {
     var body: some View {
         ViewThatFits(in: .horizontal) {
             HStack(spacing: interItemSpacing) { controlButtons }
+                .fixedSize(horizontal: true, vertical: false)
+            HStack(spacing: 4) { controlButtons }
+                .fixedSize(horizontal: true, vertical: false)
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: interItemSpacing) { controlButtons }
+                HStack(spacing: 4) { controlButtons }
+                    .fixedSize(horizontal: true, vertical: false)
             }
             .frame(height: iconFrame)
         }
@@ -399,80 +417,108 @@ struct CanvasFloatingToolbar: View {
 
     @ViewBuilder
     private var controlButtons: some View {
-        Button {
-            showWidthPicker = false
-            showColorPicker = true
-        } label: {
-            ZStack(alignment: .bottomTrailing) {
-                Image(systemName: "paintpalette.fill")
+        Group {
+            Button {
+                showWidthPicker = false
+                showColorPicker = true
+            } label: {
+                ZStack(alignment: .bottomTrailing) {
+                    Image(systemName: "paintpalette.fill")
+                        .font(.system(size: isPad ? 19 : 17, weight: .medium))
+                        .frame(width: iconFrame, height: iconFrame)
+                    Circle()
+                        .fill(currentSwatchColor)
+                        .frame(width: isPad ? 11 : 9, height: isPad ? 11 : 9)
+                        .overlay(Circle().stroke(strokeLine, lineWidth: 0.5))
+                        .offset(x: 2, y: 2)
+                }
+                .frame(width: iconFrame, height: iconFrame)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(Text(String(localized: "toolbar.color")))
+            .popover(isPresented: $showColorPicker, attachmentAnchor: .rect(.bounds), arrowEdge: popoverArrow) {
+                ToolbarPickerPanel(isPad: isPad) {
+                    ToolbarColorPickerBody(
+                        colors: broker.paletteUIColors,
+                        selectedIndex: broker.selectedColorIndex,
+                        isPad: isPad,
+                        onPick: { idx in
+                            onSelectColor(idx)
+                            showColorPicker = false
+                        }
+                    )
+                }
+                .presentationCompactAdaptation(.popover)
+            }
+
+            Button {
+                showColorPicker = false
+                showWidthPicker = true
+            } label: {
+                VStack(spacing: 1) {
+                    Image(systemName: "lineweight")
+                        .font(.system(size: isPad ? 17 : 15, weight: .medium))
+                    Text(broker.lineWidthLabel)
+                        .font(.system(size: isPad ? 9 : 8, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.secondary)
+                }
+                .frame(width: iconFrame, height: iconFrame)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(Text(String(localized: "toolbar.line_width")))
+            .popover(isPresented: $showWidthPicker, attachmentAnchor: .rect(.bounds), arrowEdge: popoverArrow) {
+                ToolbarPickerPanel(isPad: isPad) {
+                    ToolbarLineWidthPickerBody(
+                        presets: TapeCanvasUIView.toolbarWidthPresets,
+                        selectedIndex: broker.selectedWidthPresetIndex,
+                        isPad: isPad,
+                        sampleTint: iconTint,
+                        onPick: { idx in
+                            onSelectLineWidthPreset(idx)
+                            showWidthPicker = false
+                        }
+                    )
+                }
+                .presentationCompactAdaptation(.popover)
+            }
+
+            Menu {
+                Section("Drawing tool") {
+                    toolButton("Pen", icon: "pencil.tip", tool: .pen)
+                    toolButton("Whole-stroke eraser", icon: "eraser", tool: .eraser)
+                    toolButton("Lasso selection", icon: "lasso", tool: .lasso)
+                }
+                if broker.selectedTool == .lasso {
+                    Section("Selection: \(broker.selectedStrokeCount) strokes") {
+                        Button("Duplicate selection", systemImage: "plus.square.on.square") { broker.canvas?.toolbarDuplicateSelection() }
+                        Button("Delete selection", systemImage: "trash", role: .destructive) { broker.canvas?.toolbarDeleteSelection() }
+                        Button("Deselect", systemImage: "xmark.circle") { broker.canvas?.toolbarDeselect() }
+                    }
+                    .disabled(broker.selectedStrokeCount == 0)
+                }
+            } label: {
+                Image(systemName: broker.selectedTool == .lasso ? "lasso" : broker.selectedTool == .eraser ? "eraser.fill" : "pencil.tip")
                     .font(.system(size: isPad ? 19 : 17, weight: .medium))
                     .frame(width: iconFrame, height: iconFrame)
-                Circle()
-                    .fill(currentSwatchColor)
-                    .frame(width: isPad ? 11 : 9, height: isPad ? 11 : 9)
-                    .overlay(Circle().stroke(strokeLine, lineWidth: 0.5))
-                    .offset(x: 2, y: 2)
+                    .background(broker.selectedTool != .pen ? Color.primary.opacity(0.1) : Color.clear, in: Circle())
             }
-            .frame(width: iconFrame, height: iconFrame)
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(Text(String(localized: "toolbar.color")))
-        .popover(isPresented: $showColorPicker, attachmentAnchor: .rect(.bounds), arrowEdge: popoverArrow) {
-            ToolbarPickerPanel(isPad: isPad) {
-                ToolbarColorPickerBody(
-                    colors: broker.paletteUIColors,
-                    selectedIndex: broker.selectedColorIndex,
-                    isPad: isPad,
-                    onPick: { idx in
-                        onSelectColor(idx)
-                        showColorPicker = false
-                    }
-                )
-            }
-            .presentationCompactAdaptation(.popover)
-        }
+            .accessibilityLabel("Drawing tool and selection actions")
+            .accessibilityValue(broker.selectedTool.rawValue)
+            .accessibilityHint("Choose pen, eraser or lasso. Selection actions appear in this menu.")
 
-        Button {
-            showColorPicker = false
-            showWidthPicker = true
-        } label: {
-            VStack(spacing: 1) {
-                Image(systemName: "lineweight")
-                    .font(.system(size: isPad ? 17 : 15, weight: .medium))
-                Text(broker.lineWidthLabel)
-                    .font(.system(size: isPad ? 9 : 8, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.secondary)
-            }
-            .frame(width: iconFrame, height: iconFrame)
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(Text(String(localized: "toolbar.line_width")))
-        .popover(isPresented: $showWidthPicker, attachmentAnchor: .rect(.bounds), arrowEdge: popoverArrow) {
-            ToolbarPickerPanel(isPad: isPad) {
-                ToolbarLineWidthPickerBody(
-                    presets: TapeCanvasUIView.toolbarWidthPresets,
-                    selectedIndex: broker.selectedWidthPresetIndex,
-                    isPad: isPad,
-                    sampleTint: iconTint,
-                    onPick: { idx in
-                        onSelectLineWidthPreset(idx)
-                        showWidthPicker = false
-                    }
-                )
-            }
-            .presentationCompactAdaptation(.popover)
-        }
+            commandButton("toolbar.undo", icon: "arrow.uturn.backward", action: onUndo)
+                .disabled(!broker.undoEnabled)
+                .opacity(broker.undoEnabled ? 1 : 0.35)
+            commandButton("toolbar.redo", icon: "arrow.uturn.forward", action: onRedo)
+                .disabled(!broker.redoEnabled)
+                .opacity(broker.redoEnabled ? 1 : 0.35)
+            commandButton("toolbar.export", icon: "square.and.arrow.up", action: onExport)
+            commandButton(broker.paperMovementLocked ? "toolbar.paper_unlock" : "toolbar.paper_lock", icon: broker.paperMovementLocked ? "lock.fill" : "lock.open.fill",
+                          compact: true, action: onTogglePaperLock)
+                .opacity(broker.paperMovementLocked ? 1 : 0.72)
 
-        commandButton("toolbar.undo", icon: "arrow.uturn.backward", action: onUndo)
-            .disabled(!broker.undoEnabled)
-            .opacity(broker.undoEnabled ? 1 : 0.35)
-        commandButton("toolbar.redo", icon: "arrow.uturn.forward", action: onRedo)
-            .disabled(!broker.redoEnabled)
-            .opacity(broker.redoEnabled ? 1 : 0.35)
-        commandButton("toolbar.export", icon: "square.and.arrow.up", action: onExport)
-        commandButton(broker.paperMovementLocked ? "toolbar.paper_unlock" : "toolbar.paper_lock", icon: broker.paperMovementLocked ? "lock.fill" : "lock.open.fill",
-                      compact: true, action: onTogglePaperLock)
-            .opacity(broker.paperMovementLocked ? 1 : 0.72)
+        }
+        .disabled(!broker.canvasReady)
 
         Button {
             showColorPicker = false
@@ -490,6 +536,11 @@ struct CanvasFloatingToolbar: View {
         .popover(isPresented: $showInfinityMenu, attachmentAnchor: .rect(.bounds), arrowEdge: popoverArrow) {
             InfinityToolbarPopover(
                 isPad: isPad,
+                canvasReady: broker.canvasReady,
+                onMyDrawings: {
+                    showInfinityMenu = false
+                    onMyDrawings()
+                },
                 onClearCanvas: {
                     showInfinityMenu = false
                     onInfinityClearCanvas()
@@ -527,6 +578,13 @@ struct CanvasFloatingToolbar: View {
         }
 
         commandButton("toolbar.settings", icon: "gearshape", compact: true, action: onSettings)
+            .disabled(!broker.canvasReady)
+    }
+
+    private func toolButton(_ title: String, icon: String, tool: CanvasTool) -> some View {
+        Button { broker.canvas?.toolbarSetTool(tool) } label: {
+            Label(title, systemImage: broker.selectedTool == tool ? "checkmark" : icon)
+        }
     }
 
     private func commandButton(_ titleKey: String, icon: String, compact: Bool = false,

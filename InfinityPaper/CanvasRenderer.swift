@@ -13,6 +13,7 @@ struct RenderStroke {
     var times: [TimeInterval]
     var color: UIColor
     var lineWidth: CGFloat
+    var widthScales: [CGFloat] = []
 }
 
 struct PreparedRenderStrokeSegment {
@@ -32,8 +33,6 @@ final class CanvasRenderer {
         /// Slightly higher than before so line width eases with speed changes instead of ticking.
         static let strokeSmoothingAlpha: CGFloat = 0.2
         static let noiseTileSize: CGFloat = 96
-        /// Soft pull of stroke ends toward smoothed interior (render only); keeps tips from feeling hooked.
-        static let strokeEndpointBlend: CGFloat = 0.08
     }
     
     /// Draws a stroke in world coordinates (no transform).
@@ -51,11 +50,11 @@ final class CanvasRenderer {
     static func prepareStroke(_ stroke: RenderStroke) -> PreparedRenderStroke? {
         if let point = stroke.points.first, stroke.points.count == 1 {
             return PreparedRenderStroke(color: stroke.color, segments: [
-                PreparedRenderStrokeSegment(start: point, end: CGPoint(x: point.x + 0.01, y: point.y), width: stroke.lineWidth)
+                PreparedRenderStrokeSegment(start: point, end: CGPoint(x: point.x + 0.01, y: point.y), width: stroke.lineWidth * PencilStrokeWidth.scale(at: 0, in: stroke.widthScales))
             ])
         }
         guard stroke.points.count > 1 else { return nil }
-        let smoothed = smoothedPoints(for: stroke.points, passes: 2)
+        let smoothed = CanvasStrokeGeometry.smoothedPoints(for: stroke.points, passes: 2)
         guard smoothed.count > 1 else { return nil }
         let segments = makeSegments(stroke, smoothedPoints: smoothed)
         guard !segments.isEmpty else { return nil }
@@ -91,14 +90,14 @@ final class CanvasRenderer {
         let tailStart = max(0, smoothed.count - 1 - tailCount)
         let minScale: CGFloat = 0.15
         
-        var filteredScale: CGFloat = 1.0
+        var filteredScale = PencilStrokeWidth.scale(at: 0, in: stroke.widthScales)
         let smoothingAlpha = Layout.strokeSmoothingAlpha
         var segments: [PreparedRenderStrokeSegment] = []
         segments.reserveCapacity(smoothed.count - 1)
         for i in 1..<smoothed.count {
             let start = smoothed[i - 1]
             let end = smoothed[i]
-            let targetScale = targetWidthScale(for: stroke, index: i)
+            let targetScale = targetWidthScale(for: stroke, index: i) * PencilStrokeWidth.scale(at: i, in: stroke.widthScales)
             filteredScale = filteredScale + (targetScale - filteredScale) * smoothingAlpha
             let width = stroke.lineWidth * filteredScale
             let tailScale: CGFloat
@@ -118,44 +117,6 @@ final class CanvasRenderer {
             )
         }
         return segments
-    }
-    
-    /// Smooths points using a simple averaging filter.
-    /// - Parameters:
-    ///   - points: The points to smooth
-    ///   - passes: Number of smoothing passes
-    /// - Returns: Smoothed points
-    static func smoothedPoints(for points: [CGPoint], passes: Int) -> [CGPoint] {
-        guard points.count > 2 else { return points }
-        var current = points
-        for _ in 0..<passes {
-            var next = current
-            for i in 1..<(current.count - 1) {
-                let prev = current[i - 1]
-                let curr = current[i]
-                let nextPoint = current[i + 1]
-                next[i] = CGPoint(
-                    x: prev.x * 0.25 + curr.x * 0.5 + nextPoint.x * 0.25,
-                    y: prev.y * 0.25 + curr.y * 0.5 + nextPoint.y * 0.25
-                )
-            }
-            current = next
-        }
-        if current.count >= 3 {
-            let w = Layout.strokeEndpointBlend
-            var eased = current
-            eased[0] = CGPoint(
-                x: eased[0].x * (1 - w) + eased[1].x * w,
-                y: eased[0].y * (1 - w) + eased[1].y * w
-            )
-            let li = eased.count - 1
-            eased[li] = CGPoint(
-                x: eased[li].x * (1 - w) + eased[li - 1].x * w,
-                y: eased[li].y * (1 - w) + eased[li - 1].y * w
-            )
-            return eased
-        }
-        return current
     }
     
     /// Calculates width scale based on drawing speed.
