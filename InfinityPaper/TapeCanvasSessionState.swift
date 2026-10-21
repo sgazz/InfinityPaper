@@ -7,6 +7,7 @@ struct TapeSessionStroke {
     var color: UIColor
     var lineWidth: CGFloat
     var widthScales: [CGFloat] = []
+    var lineStyle: CanvasLineStyle = .solid
 }
 
 /// In-memory identity of a snapshot. Replaced on clear/load, never persisted.
@@ -149,7 +150,7 @@ final class TapeCanvasSessionState {
         let stored = drawing.map { stroke in
             StoredStroke(points: stroke.points.map { StoredPoint(x: $0.x, y: $0.y) }, times: stroke.times,
                          color: stroke.color.toStoredColor(), lineWidth: stroke.lineWidth,
-                         widthScales: stroke.widthScales.isEmpty ? nil : stroke.widthScales)
+                         widthScales: stroke.widthScales.isEmpty ? nil : stroke.widthScales, lineStyle: stroke.lineStyle)
         }
         // Version 2 stores a single ordered sequence. The spatial grid is rebuilt, never persisted.
         return StoredSession(segments: [StoredSegment(id: 0, strokes: stored)],
@@ -163,7 +164,7 @@ final class TapeCanvasSessionState {
         let segments = (session.formatVersion ?? 1) < 2 ? session.segments.sorted { $0.id < $1.id } : session.segments
         let drawing = segments.flatMap { $0.strokes }.map { stroke in
             TapeSessionStroke(points: stroke.points.map { CGPoint(x: $0.x, y: $0.y) }, times: stroke.times ?? [],
-                              color: stroke.color.toUIColor(), lineWidth: stroke.lineWidth, widthScales: stroke.widthScales ?? [])
+                              color: stroke.color.toUIColor(), lineWidth: stroke.lineWidth, widthScales: stroke.widthScales ?? [], lineStyle: stroke.lineStyle ?? .solid)
         }
         removeDrawing()
         for stroke in drawing { insert(stroke) }

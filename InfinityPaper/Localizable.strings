@@ -18,7 +18,7 @@
 
 "toolbar.color" = "Brush color";
 "toolbar.color_slot" = "Color %d";
-"toolbar.line_width" = "Line width";
+"toolbar.line_width" = "Line width & style";
 "toolbar.undo" = "Undo";
 "toolbar.redo" = "Redo";
 "toolbar.export" = "Export";
@@ -78,7 +78,7 @@
 "help.pencil.body" = "Pencil-only mode is on: draw with Apple Pencil, move the paper with one finger, and pinch with two fingers to zoom. Double-tap with two fingers to reset the view.";
 "help.movement.body" = "The paper moves automatically as you draw. If paper movement is locked, unlock it in the top bar to move the paper again.";
 "help.tools.title" = "Pen & eraser";
-"help.tools.body" = "Open the drawing tool menu in the top bar to choose Pen, Whole-stroke eraser, or Lasso selection. The eraser removes an entire stroke. Use the color and line width controls for new strokes, and Undo or Redo for edits.";
+"help.tools.body" = "Open the drawing tool menu in the top bar to choose Pen, Whole-stroke eraser, or Lasso selection. The eraser removes an entire stroke. Use the color, line width, and line style controls for new strokes, and Undo or Redo for edits.";
 "help.selection.title" = "Select & move";
 "help.selection.body" = "Choose Lasso selection and draw a loop around strokes. Drag inside the dashed frame to move them. Open the drawing tool menu again to duplicate, delete, or deselect the selected strokes.";
 "help.reference.title" = "Reference image";
@@ -89,3 +89,10 @@
 "help.pencil.settings_body" = "On iPad, Settings lets you enable Pencil-only drawing and adjust pressure, tilt, and sensitivity. Pressure and tilt affect new strokes when supported by your Pencil.";
 "help.focus.title" = "Focus mode & tips";
 "help.focus.body" = "Choose Focus mode in the More (…) menu to hide the tools. Tap Show tools to bring them back. Close the quick tips with the × button; this guide is always available in Settings.";
+
+"line_style.title" = "Line style";
+"line_style.solid" = "Solid";
+"line_style.dashed" = "Dashed";
+"line_style.dotted" = "Dotted";
+
+"line_style.width" = "Line width";

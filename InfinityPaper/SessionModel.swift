@@ -31,6 +31,7 @@ nonisolated struct StoredStroke: Codable, Sendable {
     var color: StoredColor
     var lineWidth: CGFloat
     var widthScales: [CGFloat]? = nil
+    var lineStyle: CanvasLineStyle? = nil
 }
 
 nonisolated struct StoredPoint: Codable, Sendable {

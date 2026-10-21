@@ -10,6 +10,7 @@ enum AppSettings {
     static let autosaveModeDidChange = Notification.Name("autosaveMode.didChange")
     static let colorIndex = "settings.baseColorIndex"
     static let lineWidth = "settings.baseLineWidth"
+    static let lineStyle = "settings.lineStyle"
     static let includeReferenceImage = "settings.export.includeReferenceImage"
     static let includePaperPattern = "settings.export.includePaperPattern"
     static let exportFull = "settings.export.full"

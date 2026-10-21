@@ -14,6 +14,7 @@ struct RenderStroke {
     var color: UIColor
     var lineWidth: CGFloat
     var widthScales: [CGFloat] = []
+    var lineStyle: CanvasLineStyle = .solid
 }
 
 struct PreparedRenderStrokeSegment {
@@ -56,7 +57,8 @@ final class CanvasRenderer {
         guard stroke.points.count > 1 else { return nil }
         let smoothed = CanvasStrokeGeometry.smoothedPoints(for: stroke.points, passes: 2)
         guard smoothed.count > 1 else { return nil }
-        let segments = makeSegments(stroke, smoothedPoints: smoothed)
+        let segments = patternedSegments(makeSegments(stroke, smoothedPoints: smoothed),
+                                         style: stroke.lineStyle, baseWidth: stroke.lineWidth)
         guard !segments.isEmpty else { return nil }
         return PreparedRenderStroke(color: stroke.color, segments: segments)
     }
@@ -141,6 +143,41 @@ final class CanvasRenderer {
         return thick - (thick - thin) * normalized
     }
     
+    /// Splits prepared geometry by arc length so preview, cached drawing and exports agree.
+    static func patternedSegments(_ segments: [PreparedRenderStrokeSegment], style: CanvasLineStyle,
+                                  baseWidth: CGFloat) -> [PreparedRenderStrokeSegment] {
+        let pattern = style.dashLengths(width: baseWidth)
+        guard !pattern.isEmpty else { return segments }
+        var result: [PreparedRenderStrokeSegment] = []
+        var phase = 0
+        var remaining = pattern[0]
+        for segment in segments {
+            let dx = segment.end.x - segment.start.x
+            let dy = segment.end.y - segment.start.y
+            let length = hypot(dx, dy)
+            guard length > 0 else { continue }
+            var distance: CGFloat = 0
+            while distance < length {
+                let step = min(remaining, length - distance)
+                if phase % 2 == 0 {
+                    let start = CGPoint(x: segment.start.x + dx * distance / length,
+                                        y: segment.start.y + dy * distance / length)
+                    let endDistance = distance + step
+                    let end = CGPoint(x: segment.start.x + dx * endDistance / length,
+                                      y: segment.start.y + dy * endDistance / length)
+                    result.append(PreparedRenderStrokeSegment(start: start, end: end, width: segment.width))
+                }
+                distance += step
+                remaining -= step
+                if remaining < 0.000001 {
+                    phase = (phase + 1) % pattern.count
+                    remaining = pattern[phase]
+                }
+            }
+        }
+        return result
+    }
+
     /// Draws noise texture in the specified rect.
     /// - Parameters:
     ///   - context: The graphics context

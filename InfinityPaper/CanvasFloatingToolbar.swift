@@ -181,11 +181,16 @@ struct CanvasFloatingToolbar: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(Text(String(localized: "toolbar.line_width")))
+        .accessibilityValue(Text(broker.state.lineStyle.title))
         .popover(isPresented: isPresented(.width), attachmentAnchor: .rect(.bounds), arrowEdge: popoverArrow) {
             CanvasToolbarPickerPanel(isPad: isPad) {
                 CanvasToolbarLineWidthPickerBody(
                     presets: TapeCanvasUIView.toolbarWidthPresets,
                     selectedIndex: broker.state.selectedWidthPresetIndex,
+                    selectedStyle: broker.state.lineStyle,
+                    onPickStyle: { style in
+                        broker.canvas?.toolbarSetLineStyle(style)
+                    },
                     isPad: isPad,
                     sampleTint: iconTint,
                     onPick: { idx in

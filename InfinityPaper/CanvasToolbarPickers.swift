@@ -45,45 +45,41 @@ struct CanvasToolbarColorPickerBody: View {
     let onPick: (Int) -> Void
 
     private var swatch: CGFloat { isPad ? 30 : 26 }
-    private var spacing: CGFloat { isPad ? 12 : 10 }
+    private var cellSize: CGFloat { isPad ? 48 : 44 }
+    private var spacing: CGFloat { isPad ? 8 : 6 }
+    private var columns: [GridItem] {
+        Array(repeating: GridItem(.fixed(cellSize), spacing: spacing), count: isPad ? 6 : 5)
+    }
 
     var body: some View {
-        ZStack(alignment: .trailing) {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: spacing) {
-                    ForEach(Array(colors.enumerated()), id: \.offset) { idx, ui in
-                        Button {
-                            onPick(idx)
-                        } label: {
-                            ZStack {
+        LazyVGrid(columns: columns, spacing: spacing) {
+            ForEach(Array(colors.enumerated()), id: \.offset) { idx, ui in
+                Button {
+                    onPick(idx)
+                } label: {
+                    ZStack {
+                        Circle()
+                            .fill(Color(uiColor: ui))
+                            .frame(width: swatch, height: swatch)
+                            .overlay(
                                 Circle()
-                                    .fill(Color(uiColor: ui))
-                                    .frame(width: swatch, height: swatch)
-                                    .overlay(
-                                        Circle()
-                                            .stroke(Color.primary.opacity(0.12), lineWidth: 0.5)
-                                    )
-                                if idx == selectedIndex {
-                                    Circle()
-                                        .stroke(Color.primary.opacity(0.55), lineWidth: 2)
-                                        .frame(width: swatch + 6, height: swatch + 6)
-                                }
-                            }
-                            .frame(width: swatch + 10, height: swatch + 10)
+                                    .stroke(Color.primary.opacity(0.12), lineWidth: 0.5)
+                            )
+                        if idx == selectedIndex {
+                            Circle()
+                                .stroke(Color.primary.opacity(0.55), lineWidth: 2)
+                                .frame(width: swatch + 6, height: swatch + 6)
                         }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel(Text(CanvasBrush.colorName(at: idx)))
-                        .accessibilityAddTraits(idx == selectedIndex ? .isSelected : [])
                     }
+                    .frame(width: cellSize, height: cellSize)
+                    .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
+                .accessibilityLabel(Text(CanvasBrush.colorName(at: idx)))
+                .accessibilityAddTraits(idx == selectedIndex ? .isSelected : [])
             }
-            Image(systemName: "chevron.right.circle.fill")
-                .font(.system(size: isPad ? 17 : 15, weight: .semibold))
-                .foregroundStyle(Color.primary.opacity(0.45))
-                .padding(.trailing, 2)
-                .allowsHitTesting(false)
         }
-        .frame(maxWidth: isPad ? 360 : 260)
+        .fixedSize(horizontal: true, vertical: true)
     }
 }
 
@@ -92,6 +88,8 @@ struct CanvasToolbarColorPickerBody: View {
 struct CanvasToolbarLineWidthPickerBody: View {
     let presets: [CGFloat]
     let selectedIndex: Int
+    let selectedStyle: CanvasLineStyle
+    let onPickStyle: (CanvasLineStyle) -> Void
     let isPad: Bool
     let sampleTint: Color
     let onPick: (Int) -> Void
@@ -100,38 +98,68 @@ struct CanvasToolbarLineWidthPickerBody: View {
     private var barWidth: CGFloat { isPad ? 36 : 32 }
 
     var body: some View {
-        HStack(spacing: isPad ? 14 : 10) {
-            ForEach(Array(presets.enumerated()), id: \.offset) { idx, width in
-                Button {
-                    onPick(idx)
-                } label: {
-                    let displayH = min(max(width * 1.05, 2), 8)
-                    VStack(spacing: 6) {
-                        Capsule(style: .continuous)
-                            .fill(sampleTint)
-                            .frame(width: barWidth, height: displayH)
-                        if isPad {
-                            Text(String(format: "%.1f", width))
-                                .font(.caption2.weight(.medium))
-                                .foregroundStyle(.tertiary)
+        VStack(alignment: .leading, spacing: 12) {
+            Text("line_style.title").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+            LazyVGrid(columns: Array(repeating: GridItem(.fixed(isPad ? 68 : 60)), count: 3), spacing: 8) {
+                ForEach(CanvasLineStyle.allCases, id: \.self) { style in
+                    Button { onPickStyle(style) } label: {
+                        VStack(spacing: 8) {
+                            Canvas { context, size in
+                                var path = Path()
+                                path.move(to: CGPoint(x: 5, y: size.height / 2))
+                                path.addLine(to: CGPoint(x: size.width - 5, y: size.height / 2))
+                                context.stroke(path, with: .color(sampleTint), style: StrokeStyle(
+                                    lineWidth: 2.5, lineCap: .round, dash: style.dashLengths(width: 2.5)))
+                            }
+                            .frame(height: 14)
+                            Text(style.title).font(.caption2)
                         }
+                        .frame(maxWidth: .infinity, minHeight: 60)
+                        .background(Color.primary.opacity(style == selectedStyle ? 0.08 : 0), in: RoundedRectangle(cornerRadius: 10))
+                        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.primary.opacity(style == selectedStyle ? 0.55 : 0.12), lineWidth: 1))
+                        .contentShape(Rectangle())
                     }
-                    .frame(width: cellW, height: isPad ? 52 : 44)
-                    .background(
-                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .fill(Color.primary.opacity(idx == selectedIndex ? 0.08 : 0))
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .stroke(Color.primary.opacity(idx == selectedIndex ? 0.35 : 0), lineWidth: 1.5)
-                    )
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(Text(style.title))
+                    .accessibilityAddTraits(style == selectedStyle ? .isSelected : [])
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel(widthAccessibilityLabel(for: width))
-                .accessibilityValue(Text("\(String(format: "%.1f", width)) pt"))
-                .accessibilityAddTraits(idx == selectedIndex ? .isSelected : [])
+            }
+            Divider()
+            Text("line_style.width").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+            LazyVGrid(columns: Array(repeating: GridItem(.fixed(isPad ? 104 : 96)), count: 2), spacing: 8) {
+                ForEach(Array(presets.enumerated()), id: \.offset) { idx, width in
+                    Button {
+                        onPick(idx)
+                    } label: {
+                        let displayH = min(max(width * 1.05, 2), 8)
+                        VStack(spacing: 6) {
+                            Capsule(style: .continuous)
+                                .fill(sampleTint)
+                                .frame(width: barWidth, height: displayH)
+                            if isPad {
+                                Text(String(format: "%.1f", width))
+                                    .font(.caption2.weight(.medium))
+                                    .foregroundStyle(.tertiary)
+                            }
+                        }
+                        .frame(width: cellW, height: isPad ? 52 : 44)
+                        .background(
+                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                .fill(Color.primary.opacity(idx == selectedIndex ? 0.08 : 0))
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                .stroke(Color.primary.opacity(idx == selectedIndex ? 0.35 : 0), lineWidth: 1.5)
+                        )
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(widthAccessibilityLabel(for: width))
+                    .accessibilityValue(Text("\(String(format: "%.1f", width)) pt"))
+                    .accessibilityAddTraits(idx == selectedIndex ? .isSelected : [])
+                }
             }
         }
+        .fixedSize(horizontal: true, vertical: true)
     }
 
     private func widthAccessibilityLabel(for width: CGFloat) -> Text {

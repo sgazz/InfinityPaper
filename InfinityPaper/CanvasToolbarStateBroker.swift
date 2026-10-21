@@ -12,6 +12,7 @@ struct CanvasToolbarState: Equatable {
     var lineWidthLabel = ""
     var selectedColorIndex = 0
     var selectedWidthPresetIndex = 0
+    var lineStyle: CanvasLineStyle = .solid
     var paperMovementLocked = false
     var strokePreviewUIColor = UIColor.darkGray
     var palette: [UIColor] = []
@@ -62,7 +63,7 @@ extension TapeCanvasUIView: CanvasToolbarStateProviding {
         CanvasToolbarState(canvasReady: documentReady, selectedTool: selectedTool, selectedStrokeCount: selectedStrokeCount,
             undoEnabled: toolbarUndoEnabled, redoEnabled: toolbarRedoEnabled,
             lineWidthLabel: String(format: "%.1f", toolbarBaseLineWidth), selectedColorIndex: toolbarSelectedPaletteIndex,
-            selectedWidthPresetIndex: toolbarWidthPresetIndex(), paperMovementLocked: toolbarPaperMovementLocked,
+            selectedWidthPresetIndex: toolbarWidthPresetIndex(), lineStyle: lineStyle, paperMovementLocked: toolbarPaperMovementLocked,
             strokePreviewUIColor: exposedBaseStrokeColor, palette: exposedPrimaryPalette)
     }
 }

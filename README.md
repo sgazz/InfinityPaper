@@ -68,7 +68,9 @@ Ova komanda kompajlira aplikaciju i testove; ne pokreće ih i ne pravi potpisanu
 | Pomeranje papira | Prevlačenje sa dva prsta; jedan prst kada je uključen Pencil-only režim |
 | Zumiranje | Pinch gest ili komande alatne trake |
 | Vraćanje prikaza | Dvostruki dodir sa dva prsta resetuje zum i centrira sadržaj |
-| Boja, debljina, undo/redo | Plutajuća alatna traka |
+| Boja | Mreža boja u plutajućoj alatnoj traci |
+| Debljina i stil linije | Meni debljine: mreža stilova Solid, Dashed, Dotted i mreža debljina; važi za nove poteze |
+| Undo/redo | Plutajuća alatna traka |
 | Centriranje, fit, novi prostor i focus | Dodatne komande alatne trake |
 | Papir, izvoz i čuvanje | Settings |
 
@@ -152,7 +154,7 @@ Swift izvorni fajlovi iz tabele nalaze se u direktorijumu `InfinityPaper/`.
 
 ## Testovi
 
-Repozitorijum sadrži **83 XCTest test metoda**. U Xcode-u izaberite scheme **InfinityPaper**, kompatibilni simulator ili uređaj i pokrenite **Product → Test** (`⌘U`). Test plan je `InfinityPaper.xctestplan`.
+Repozitorijum sadrži **87 XCTest test metoda**. U Xcode-u izaberite scheme **InfinityPaper**, kompatibilni simulator ili uređaj i pokrenite **Product → Test** (`⌘U`). Test plan je `InfinityPaper.xctestplan`.
 
 Za pokretanje iz terminala, prvo pronađite UDID dostupnog simulatora, pa zamenite `SIMULATOR_UDID` u komandi:
 
@@ -164,4 +166,4 @@ xcodebuild \
   test
 ```
 
-Poslednja provera (21. oktobar 2026): svih 83 XCTest test metoda uspešno je izvršeno na iPhone 17e simulatoru. Aplikacija i testovi uspešno su kompajlirani i za iOS uređaj. Dodatno je prošlo 78 testova logike u lokalnom macOS test okruženju sa UIKit zamenskim tipovima; to pomoćno okruženje nije deo repozitorijuma. Vizuelni raspored trake nakon refaktorisanja još nije ručno potvrđen.
+Poslednja provera (21. oktobar 2026): svih 87 XCTest test metoda uspešno je izvršeno na iPhone 17e simulatoru, uključujući testove kontinuiteta isprekidane linije, tačkastih poteza i kompatibilnosti starih crteža. Isti renderer koristi se za canvas i izvoz. Ručna vizuelna provera nove mreže i stilova još nije potvrđena.
