@@ -21,6 +21,7 @@ struct TapeCanvasView: View {
 
     @StateObject private var toolbarBroker = CanvasToolbarStateBroker()
     @State private var showSettings = false
+    @State private var showHelp = false
     @AppStorage(AppSettings.pencilOnly) private var pencilOnly = false
     private var pencilOnlyMode: Bool {
         CanvasInputPolicy.pencilOnly(requested: pencilOnly, supportsPencil: UIDevice.current.userInterfaceIdiom == .pad)
@@ -40,36 +41,19 @@ struct TapeCanvasView: View {
             )
             .ignoresSafeArea(edges: .bottom)
 
-            GeometryReader { _ in
+            if !firstUseOrientationDismissed && !chromeHiddenForFocus {
                 VStack {
                     Spacer(minLength: 0)
-                    if !firstUseOrientationDismissed {
-                        VStack(spacing: 10) {
-                            Text(NSLocalizedString(pencilOnlyMode ? "first_use.pencil_lead" : "first_use.lead", comment: "First session one-line hint"))
-                                .font(.footnote)
-                                .foregroundStyle(.secondary)
-                            Text(NSLocalizedString(pencilOnlyMode ? "first_use.pencil_body" : "first_use.body", comment: "First session second line"))
-                                .font(.caption)
-                                .foregroundStyle(.tertiary)
-                                .multilineTextAlignment(.center)
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding(.horizontal, 28)
-                        .padding(.top, 64)
-                        .padding(.bottom, 8)
-                        .opacity(chromeHiddenForFocus ? 0 : 1)
-                        .allowsHitTesting(!chromeHiddenForFocus)
-                        .transition(.opacity)
-                        .onTapGesture {
-                            withAnimation(.easeOut(duration: 0.2)) {
-                                firstUseOrientationDismissed = true
-                            }
+                    CanvasQuickHelpView(pencilOnly: pencilOnlyMode, onLearnMore: { showHelp = true }) {
+                        withAnimation(.easeOut(duration: 0.2)) {
+                            firstUseOrientationDismissed = true
                         }
                     }
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 8)
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .transition(.opacity)
             }
-            .allowsHitTesting(!chromeHiddenForFocus)
 
         }
         .safeAreaInset(edge: .top, spacing: 0) {
@@ -184,6 +168,7 @@ struct TapeCanvasView: View {
         .alert("Could not save drawing", isPresented: Binding(get: { closeError != nil }, set: { if !$0 { closeError = nil } })) {
             Button("OK", role: .cancel) { closeError = nil }
         } message: { Text(closeError ?? "") }
+        .sheet(isPresented: $showHelp) { CanvasHelpView() }
         .sheet(isPresented: $showSettings) {
             if let cv = toolbarBroker.canvas {
                 SettingsView(

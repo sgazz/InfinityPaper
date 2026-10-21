@@ -6,8 +6,8 @@
 
 "splash.whisper" = "Think, scribble, let the tape roll.";
 
-"first_use.lead" = "Draw with one finger, the paper moves by itself.";
-"first_use.body" = "Use two fingers to move the paper or pinch to zoom. Double-tap with two fingers to reset the view. Tools live in the top bar.";
+"first_use.lead" = "Draw with one finger.";
+"first_use.body" = "Move with two fingers. Pinch to zoom.";
 
 "about.purpose" = "Not for lists or neat notes. A place to unload your head, doodle, and follow a line as far as it goes.";
 "about.sub" = "No pages to name. No pressure to finish.";
@@ -66,6 +66,26 @@
 
 "toolbar.my_drawings" = "My drawings";
 
-"first_use.pencil_lead" = "Draw with Apple Pencil, the paper moves by itself.";
-"first_use.pencil_body" = "Use one finger to move the paper or two fingers to zoom. Double-tap with two fingers to reset the view. Tools live in the top bar.";
+"first_use.pencil_lead" = "Draw with Apple Pencil.";
+"first_use.pencil_body" = "Move with one finger. Pinch with two to zoom.";
 "accessibility.canvas_hint_pencil" = "Draw with Apple Pencil. Use one finger to move the paper and two fingers to zoom. Drawing tools and settings are in the top bar.";
+
+"first_use.learn_more" = "Learn more";
+"first_use.dismiss" = "Dismiss drawing tips";
+"help.title" = "How to use InfinityPaper";
+"help.drawing.title" = "Drawing & navigation";
+"help.drawing.body" = "Draw with one finger or Apple Pencil. Move the paper with two fingers and pinch to zoom. Double-tap with two fingers to reset the view.";
+"help.pencil.body" = "Pencil-only mode is on: draw with Apple Pencil, move the paper with one finger, and pinch with two fingers to zoom. Double-tap with two fingers to reset the view.";
+"help.movement.body" = "The paper moves automatically as you draw. If paper movement is locked, unlock it in the top bar to move the paper again.";
+"help.tools.title" = "Pen & eraser";
+"help.tools.body" = "Open the drawing tool menu in the top bar to choose Pen, Whole-stroke eraser, or Lasso selection. The eraser removes an entire stroke. Use the color and line width controls for new strokes, and Undo or Redo for edits.";
+"help.selection.title" = "Select & move";
+"help.selection.body" = "Choose Lasso selection and draw a loop around strokes. Drag inside the dashed frame to move them. Open the drawing tool menu again to duplicate, delete, or deselect the selected strokes.";
+"help.reference.title" = "Reference image";
+"help.reference.body" = "Open Settings → Reference image to import a photo from Photos or Files. Adjust its size, opacity, visibility, and position in that panel, then tap Done. Each drawing can have one reference image. Lasso selection applies to strokes.";
+"help.library.title" = "My drawings & sharing";
+"help.library.body" = "Open the More (…) menu and choose My drawings to return to your library, or New drawing to start another drawing. Use Export in the top bar to share your work.";
+"help.pencil.title" = "Apple Pencil settings";
+"help.pencil.settings_body" = "On iPad, Settings lets you enable Pencil-only drawing and adjust pressure, tilt, and sensitivity. Pressure and tilt affect new strokes when supported by your Pencil.";
+"help.focus.title" = "Focus mode & tips";
+"help.focus.body" = "Choose Focus mode in the More (…) menu to hide the tools. Tap Show tools to bring them back. Close the quick tips with the × button; this guide is always available in Settings.";

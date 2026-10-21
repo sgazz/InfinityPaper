@@ -134,7 +134,10 @@ Kopija i položaj čuvaju se u session.json dokumenta; nije potrebna trajna veza
 | `CanvasStrokeGeometry.swift`, `CanvasStrokeHitTesting.swift` | Zajednička putanja crtanja i geometrija gumice |
 | `PaperPattern.swift`, `PaperPatternRenderer.swift` | Podloge sa linijama, mrežom i tačkicama |
 | `TapeCanvasUIView.swift` | Dodiri, gestovi, UIKit prikaz i koordinacija canvas komponenti |
-| `CanvasFloatingToolbar.swift`, `SettingsView.swift` | Alatna traka, broker stanja i podešavanja |
+| `CanvasFloatingToolbar.swift` | Raspored trake i izbor otvorenog popovera |
+| `CanvasToolbarStateBroker.swift` | Jedan konzistentan snimak stanja i povezivanje sa UIKit canvasom |
+| `CanvasToolbarPickers.swift`, `CanvasToolbarToolMenu.swift`, `CanvasToolbarMoreMenu.swift` | Birači, alati i tipski definisane dodatne komande |
+| `SettingsView.swift` | Podešavanja aplikacije |
 | `CanvasViewport.swift`, `CanvasGeometry.swift` | Koordinatne transformacije i zajednička geometrijska pravila |
 | `CanvasRenderer.swift`, `CanvasRenderState.swift` | Priprema i crtanje poteza, tekstura i keširanje |
 | `CanvasMotionController.swift` | Inercija i raspoređivanje automatskog pomeranja |
@@ -149,7 +152,7 @@ Swift izvorni fajlovi iz tabele nalaze se u direktorijumu `InfinityPaper/`.
 
 ## Testovi
 
-Repozitorijum sadrži **79 XCTest test metoda**. U Xcode-u izaberite scheme **InfinityPaper**, kompatibilni simulator ili uređaj i pokrenite **Product → Test** (`⌘U`). Test plan je `InfinityPaper.xctestplan`.
+Repozitorijum sadrži **83 XCTest test metoda**. U Xcode-u izaberite scheme **InfinityPaper**, kompatibilni simulator ili uređaj i pokrenite **Product → Test** (`⌘U`). Test plan je `InfinityPaper.xctestplan`.
 
 Za pokretanje iz terminala, prvo pronađite UDID dostupnog simulatora, pa zamenite `SIMULATOR_UDID` u komandi:
 
@@ -161,4 +164,4 @@ xcodebuild \
   test
 ```
 
-Poslednja provera: aplikacija i svih 79 test metoda uspešno su kompajlirani za iOS. Dodatno je prošlo 74 testova logike u lokalnom macOS test okruženju sa UIKit zamenskim tipovima; to pomoćno okruženje nije deo repozitorijuma. Izvršavanje iOS testova i vizuelna provera zahtevaju dostupan simulator runtime ili uređaj.
+Poslednja provera (21. oktobar 2026): svih 83 XCTest test metoda uspešno je izvršeno na iPhone 17e simulatoru. Aplikacija i testovi uspešno su kompajlirani i za iOS uređaj. Dodatno je prošlo 78 testova logike u lokalnom macOS test okruženju sa UIKit zamenskim tipovima; to pomoćno okruženje nije deo repozitorijuma. Vizuelni raspored trake nakon refaktorisanja još nije ručno potvrđen.
