@@ -75,6 +75,6 @@ final class CanvasRenderState {
     }
 
     private func renderStroke(_ stroke: TapeSessionStroke) -> RenderStroke {
-        RenderStroke(points: stroke.points, times: stroke.times, color: stroke.color, lineWidth: stroke.lineWidth, widthScales: stroke.widthScales)
+        RenderStroke(points: stroke.points, times: stroke.times, color: stroke.color, lineWidth: stroke.lineWidth, widthScales: stroke.widthScales, lineStyle: stroke.lineStyle)
     }
 }

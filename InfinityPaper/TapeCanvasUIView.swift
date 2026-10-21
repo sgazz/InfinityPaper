@@ -41,6 +41,14 @@ final class TapeCanvasUIView: UIView {
     }
     private var baseStrokeColor: UIColor = UIColor(red: 0.18, green: 0.18, blue: 0.18, alpha: 0.9)
     private var baseLineWidth: CGFloat = AppSettings.Default.lineWidth
+    private(set) var lineStyle: CanvasLineStyle = .solid
+
+    func toolbarSetLineStyle(_ style: CanvasLineStyle) {
+        finishCurrentStroke()
+        lineStyle = style
+        AppSettings.defaults.set(style.rawValue, forKey: AppSettings.lineStyle)
+        postToolbarStateChange()
+    }
     private lazy var toastManager: CanvasToastManager = {
         CanvasToastManager(parentView: self, traitCollection: traitCollection)
     }()
@@ -377,7 +385,8 @@ final class TapeCanvasUIView: UIView {
             times: [touch.timestamp],
             color: color,
             lineWidth: baseLineWidth,
-            widthScales: input.capturesWidthProfile ? [input.widthScale(for: touch)] : []
+            widthScales: input.capturesWidthProfile ? [input.widthScale(for: touch)] : [],
+            lineStyle: lineStyle
         )
         sessionState.noteMutationForPersistence()
         if !paperMovementLocked { motion.startAutoScroll() }
@@ -825,6 +834,7 @@ final class TapeCanvasUIView: UIView {
         baseStrokeColor = CanvasBrush.color(at: toolbarSelectedPaletteIndex, traits: traitCollection)
         let defaults = AppSettings.defaults
         baseLineWidth = CGFloat(defaults.double(forKey: AppSettings.lineWidth))
+        lineStyle = CanvasLineStyle(rawValue: defaults.string(forKey: AppSettings.lineStyle) ?? "") ?? .solid
     }
 
     // MARK: - Accessibility (Canvas)

@@ -4,6 +4,7 @@ struct SettingsView: View {
     // MARK: - Brush, export and session settings
     @Environment(\.colorScheme) private var colorScheme
     @State private var showReference = false
+    @State private var showHelp = false
     @State private var referenceImage: ReferenceImage?
     let referenceViewport: CGRect
     let onReferenceChanged: (ReferenceImage?) -> Void
@@ -119,6 +120,12 @@ struct SettingsView: View {
                     }
                 }
 
+                Section {
+                    Button { showHelp = true } label: {
+                        Label("help.title", systemImage: "questionmark.circle")
+                    }
+                }
+
                 Section(header: Text("About")) {
                     Text("InfinityPaper")
                     Text("Version \(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "-")")
@@ -127,6 +134,7 @@ struct SettingsView: View {
                     }
                 }
             }
+            .sheet(isPresented: $showHelp) { CanvasHelpView() }
             .sheet(isPresented: $showReference) {
                 ReferenceImageSettingsView(reference: referenceImage, viewport: referenceViewport) { image in
                     referenceImage = image

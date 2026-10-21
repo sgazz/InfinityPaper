@@ -68,7 +68,9 @@ Ova komanda kompajlira aplikaciju i testove; ne pokreće ih i ne pravi potpisanu
 | Pomeranje papira | Prevlačenje sa dva prsta; jedan prst kada je uključen Pencil-only režim |
 | Zumiranje | Pinch gest ili komande alatne trake |
 | Vraćanje prikaza | Dvostruki dodir sa dva prsta resetuje zum i centrira sadržaj |
-| Boja, debljina, undo/redo | Plutajuća alatna traka |
+| Boja | Mreža boja u plutajućoj alatnoj traci |
+| Debljina i stil linije | Meni debljine: mreža stilova Solid, Dashed, Dotted i mreža debljina; važi za nove poteze |
+| Undo/redo | Plutajuća alatna traka |
 | Centriranje, fit, novi prostor i focus | Dodatne komande alatne trake |
 | Papir, izvoz i čuvanje | Settings |
 
@@ -134,7 +136,10 @@ Kopija i položaj čuvaju se u session.json dokumenta; nije potrebna trajna veza
 | `CanvasStrokeGeometry.swift`, `CanvasStrokeHitTesting.swift` | Zajednička putanja crtanja i geometrija gumice |
 | `PaperPattern.swift`, `PaperPatternRenderer.swift` | Podloge sa linijama, mrežom i tačkicama |
 | `TapeCanvasUIView.swift` | Dodiri, gestovi, UIKit prikaz i koordinacija canvas komponenti |
-| `CanvasFloatingToolbar.swift`, `SettingsView.swift` | Alatna traka, broker stanja i podešavanja |
+| `CanvasFloatingToolbar.swift` | Raspored trake i izbor otvorenog popovera |
+| `CanvasToolbarStateBroker.swift` | Jedan konzistentan snimak stanja i povezivanje sa UIKit canvasom |
+| `CanvasToolbarPickers.swift`, `CanvasToolbarToolMenu.swift`, `CanvasToolbarMoreMenu.swift` | Birači, alati i tipski definisane dodatne komande |
+| `SettingsView.swift` | Podešavanja aplikacije |
 | `CanvasViewport.swift`, `CanvasGeometry.swift` | Koordinatne transformacije i zajednička geometrijska pravila |
 | `CanvasRenderer.swift`, `CanvasRenderState.swift` | Priprema i crtanje poteza, tekstura i keširanje |
 | `CanvasMotionController.swift` | Inercija i raspoređivanje automatskog pomeranja |
@@ -149,7 +154,7 @@ Swift izvorni fajlovi iz tabele nalaze se u direktorijumu `InfinityPaper/`.
 
 ## Testovi
 
-Repozitorijum sadrži **79 XCTest test metoda**. U Xcode-u izaberite scheme **InfinityPaper**, kompatibilni simulator ili uređaj i pokrenite **Product → Test** (`⌘U`). Test plan je `InfinityPaper.xctestplan`.
+Repozitorijum sadrži **87 XCTest test metoda**. U Xcode-u izaberite scheme **InfinityPaper**, kompatibilni simulator ili uređaj i pokrenite **Product → Test** (`⌘U`). Test plan je `InfinityPaper.xctestplan`.
 
 Za pokretanje iz terminala, prvo pronađite UDID dostupnog simulatora, pa zamenite `SIMULATOR_UDID` u komandi:
 
@@ -161,4 +166,4 @@ xcodebuild \
   test
 ```
 
-Poslednja provera: aplikacija i svih 79 test metoda uspešno su kompajlirani za iOS. Dodatno je prošlo 74 testova logike u lokalnom macOS test okruženju sa UIKit zamenskim tipovima; to pomoćno okruženje nije deo repozitorijuma. Izvršavanje iOS testova i vizuelna provera zahtevaju dostupan simulator runtime ili uređaj.
+Poslednja provera (21. oktobar 2026): svih 87 XCTest test metoda uspešno je izvršeno na iPhone 17e simulatoru, uključujući testove kontinuiteta isprekidane linije, tačkastih poteza i kompatibilnosti starih crteža. Isti renderer koristi se za canvas i izvoz. Ručna vizuelna provera nove mreže i stilova još nije potvrđena.
