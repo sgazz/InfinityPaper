@@ -127,6 +127,16 @@ struct SettingsView: View {
                 }
 
                 Section(header: Text("About")) {
+                    NavigationLink {
+                        PrivacyPolicyView()
+                    } label: {
+                        Label("Privacy policy", systemImage: "hand.raised")
+                    }
+                    if let supportURL = AppLinks.support {
+                        Link(destination: supportURL) {
+                            Label("Support", systemImage: "questionmark.circle")
+                        }
+                    }
                     Text("InfinityPaper")
                     Text("Version \(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "-")")
                     if let websiteURL = AppLinks.website {

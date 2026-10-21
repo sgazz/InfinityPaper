@@ -167,3 +167,9 @@ xcodebuild \
 ```
 
 Poslednja provera (21. oktobar 2026): svih 87 XCTest test metoda uspešno je izvršeno na iPhone 17e simulatoru, uključujući testove kontinuiteta isprekidane linije, tačkastih poteza i kompatibilnosti starih crteža. Isti renderer koristi se za canvas i izvoz. Ručna vizuelna provera nove mreže i stilova još nije potvrđena.
+
+## App Store Connect
+
+Priprema verzije 1.5, tekstovi za listing i preostali koraci nalaze se u `Distribution/`.
+Minimalni iOS za aplikaciju je eksplicitno 18.6. `PrivacyInfo.xcprivacy` prijavljuje korišćenje lokalnih UserDefaults podešavanja (CA92.1), bez praćenja ili prikupljanja podataka.
+Verzija 1.5/build 1 pripremljena je kao ažuriranje verzije 1.4. Javne Privacy Policy i Support adrese povezane su u aplikaciji i navedene u `Distribution/metadata-en.md`. Pre distribucije treba pripremiti screenshot-ove i validirati potpisanu arhivu kroz Xcode Organizer.
